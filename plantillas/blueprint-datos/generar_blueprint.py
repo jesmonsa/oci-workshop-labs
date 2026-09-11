@@ -4,7 +4,7 @@ Genera la salida formal del módulo 4 desde una única fuente de datos:
   - Blueprint_Datos.xlsx   -> se proyecta y se llena EN VIVO.
       · Hoja «Fuentes»: inventario, con dueño y calidad. Marca solo lo que falta.
       · Hoja «Blueprint»: el lienzo de seis casillas.
-  - ../docs/04-BLUEPRINT.md        -> el mismo lienzo en Markdown, para imprimir.
+  - BLUEPRINT.md        -> el mismo lienzo en Markdown, para imprimir.
 
     python generar_blueprint.py
 Después abrir el Excel y guardarlo una vez para que calcule.
@@ -311,7 +311,7 @@ def construir_md():
     for cid, nombre, sistema, tipo in FUENTES:
         lineas.append(f"- **{cid}** {nombre} — origen: {sistema} · tipo: {tipo}")
     lineas.append("")
-    (AQUI.parent / "docs" / "04-BLUEPRINT.md").write_text("\n".join(lineas), encoding="utf-8")
+    (AQUI / "BLUEPRINT.md").write_text("\n".join(lineas), encoding="utf-8")
 
 
 if __name__ == "__main__":

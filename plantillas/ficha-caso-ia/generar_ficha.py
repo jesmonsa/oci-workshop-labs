@@ -5,7 +5,7 @@ Genera la salida formal del módulo 3 desde una única fuente de datos:
                                     Hoja «Priorización»: ordena los candidatos solo.
                                     Hoja «Ficha»: el formulario del caso elegido.
   - CANDIDATOS.md                -> catálogo de casos, legible en GitHub.
-  - ../docs/04-FICHA-CASO-USO.md -> la misma ficha en Markdown, para papel o memoria.
+  - FICHA-CASO-USO.md -> la misma ficha en Markdown, para papel o memoria.
 
 Editar CANDIDATOS / CRITERIOS / CAMPOS y volver a correr:
     python generar_ficha.py
@@ -356,7 +356,7 @@ def construir_md():
         "| Supuesto | Quién lo confirma | Para cuándo |", "|---|---|---|",
         "| | | |", "| | | |", "| | | |", "",
     ]
-    (AQUI.parent / "docs" / "04-FICHA-CASO-USO.md").write_text("\n".join(ficha), encoding="utf-8")
+    (AQUI / "FICHA-CASO-USO.md").write_text("\n".join(ficha), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ Genera la salida formal del módulo 5 desde una única fuente de datos:
   - Matriz_Observabilidad.xlsx  -> se proyecta y se llena EN VIVO.
       · Hoja «Matriz»: señal -> umbral -> responsable -> acción.
       · Hoja «Resultado»: cobertura por categoría, brechas y agenda.
-  - ../docs/04-MATRIZ.md                -> la misma matriz en Markdown.
+  - MATRIZ.md                -> la misma matriz en Markdown.
 
     python generar_matriz.py
 Después abrir el Excel y guardarlo una vez para que calcule.
@@ -427,7 +427,7 @@ def construir_md():
         "> nadie sepa qué hacer.",
         "",
     ]
-    (AQUI.parent / "docs" / "04-MATRIZ.md").write_text("\n".join(lineas), encoding="utf-8")
+    (AQUI / "MATRIZ.md").write_text("\n".join(lineas), encoding="utf-8")
 
 
 if __name__ == "__main__":
