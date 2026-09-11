@@ -1,10 +1,12 @@
-name: Publicar stacks y sitio
+name: Publicar stacks
 
-# Dos cosas al etiquetar una versión:
-#   1. Empaqueta un ZIP por stack y lo publica como activo de la release. Esa URL
-#      es la que usa el botón «Deploy to Oracle Cloud»: Resource Manager descarga
-#      el ZIP de forma anónima, así que el repositorio tiene que ser público.
-#   2. Publica el sitio de docs/ en GitHub Pages.
+# Al etiquetar una versión: empaqueta un ZIP por stack y lo publica como activo de
+# la release. Esa URL es la que usa el botón «Deploy to Oracle Cloud» — Resource
+# Manager descarga el ZIP de forma anónima, así que el repositorio tiene que ser
+# público para que el despliegue en un clic funcione.
+#
+# El sitio se publica aparte (sitio.yml): el entorno de GitHub Pages solo acepta
+# despliegues desde una rama, no desde una etiqueta.
 
 on:
   push:
@@ -13,8 +15,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   stacks:
@@ -41,18 +41,3 @@ jobs:
 
             Los botones de despliegue del sitio apuntan a `releases/latest`, así que
             al publicar esta versión quedan actualizados solos.
-
-  sitio:
-    name: Publicar el sitio
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.despliegue.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-      - id: despliegue
-        uses: actions/deploy-pages@v4
