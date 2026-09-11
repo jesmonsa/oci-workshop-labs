@@ -1,0 +1,133 @@
+title: "Módulo 4 · Datos y analítica operacional"
+description: "Base de datos administrada en subred privada, con acceso por bastión y acelerador analítico opcional. Es el laboratorio más costoso de la serie: revisar el presupuesto antes de desplegarlo."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Ubicación"
+    variables: ["compartment_ocid", "ad_index", "owner"]
+  - title: "Base de datos"
+    variables: ["shape_mysql", "almacenamiento_gb", "admin_usuario", "admin_password"]
+  - title: "Acceso"
+    variables: ["ips_admin_cidr"]
+  - title: "Acelerador analítico (costo aparte)"
+    variables: ["crear_cluster_heatwave", "tamano_cluster_heatwave", "shape_heatwave"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["tenancy_ocid", "region", "config_file_profile"]
+
+variables:
+  tenancy_ocid:
+    type: string
+    title: "Tenancy"
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    required: true
+  ad_index:
+    type: integer
+    title: "Dominio de disponibilidad"
+    default: 0
+    minimum: 0
+    maximum: 2
+  owner:
+    type: string
+    title: "Responsable"
+    default: "equipo-cloud"
+
+  shape_mysql:
+    type: string
+    title: "Shape de la base de datos"
+    description: "Verificar cuáles existen en la región antes de desplegar: oci mysql shape list --compartment-id <compartment>. Los nombres cambian entre regiones."
+    default: "MySQL.2"
+    required: true
+  almacenamiento_gb:
+    type: integer
+    title: "Almacenamiento (GB)"
+    description: "Mínimo 50. Tres millones de documentos de ejemplo ocupan bastante menos."
+    default: 50
+    minimum: 50
+    maximum: 4096
+  admin_usuario:
+    type: string
+    title: "Usuario administrador"
+    default: "admin"
+    required: true
+  admin_password:
+    type: password
+    title: "Contraseña del administrador"
+    description: "Debe incluir mayúscula, minúscula, número y símbolo."
+    required: true
+    confirmation: true
+
+  ips_admin_cidr:
+    type: array
+    title: "IPs permitidas para abrir sesiones de bastión"
+    description: "La base no tiene endpoint público: se llega por reenvío de puerto a través del bastión."
+    items:
+      type: string
+      pattern: "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(3[0-2]|[12]?[0-9])$"
+    required: true
+    default: ["0.0.0.0/32"]
+
+  crear_cluster_heatwave:
+    type: boolean
+    title: "Crear el acelerador analítico"
+    description: "Cuesta aparte del sistema de base de datos y consume crédito con rapidez. Sin él, el laboratorio funciona igual: lo que se pierde es la comparación de tiempos."
+    default: false
+  tamano_cluster_heatwave:
+    type: integer
+    title: "Nodos del acelerador"
+    default: 1
+    minimum: 1
+    maximum: 8
+    visible:
+      eq: ["crear_cluster_heatwave", true]
+  shape_heatwave:
+    type: string
+    title: "Shape del acelerador"
+    description: "Verificar con: oci mysql shape list --compartment-id <compartment> --is-supported-for HEATWAVECLUSTER"
+    default: "HeatWave.512GB"
+    visible:
+      eq: ["crear_cluster_heatwave", true]
+
+outputGroups:
+  - title: "Conexión"
+    outputs: ["mysql_ip_privada", "comando_tunel", "acelerador_activo"]
+  - title: "Identificadores"
+    outputs: ["mysql_db_system_id", "bastion_id", "bastion_endpoint_ip"]
+
+outputs:
+  mysql_ip_privada:
+    type: string
+    title: "IP privada de la base"
+    description: "Sin endpoint público, por diseño."
+    visible: true
+  comando_tunel:
+    type: string
+    title: "Cómo conectarse"
+    visible: true
+  acelerador_activo:
+    type: string
+    title: "¿Acelerador analítico?"
+    visible: true
+  mysql_db_system_id:
+    type: string
+    title: "Sistema de base de datos"
+  bastion_id:
+    type: string
+    title: "Bastión"
+  bastion_endpoint_ip:
+    type: string
+    title: "Endpoint del bastión"

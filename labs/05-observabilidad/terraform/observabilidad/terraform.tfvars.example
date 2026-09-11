@@ -1,0 +1,15 @@
+# Copiar a terraform.tfvars y completar. Los OCIDs son ficticios.
+
+compartment_ocid        = "ocid1.compartment.oc1..aaaaEJEMPLO"  # lab-05-observabilidad
+compartment_laboratorio = "ocid1.compartment.oc1..aaaaEJEMPLO"  # lab-01-elasticidad (lo que se vigila)
+region                  = "us-ashburn-1"
+
+config_file_profile = ""
+owner               = "equipo-cloud"
+
+# Cada uno debe confirmar la suscripción desde su correo, o no recibe nada.
+correos_destino = ["tu.correo@oracle.com"]
+
+# Por debajo del umbral de autoescalamiento del módulo 1 (55), a propósito.
+umbral_cpu         = 45
+duracion_pendiente = "PT3M"

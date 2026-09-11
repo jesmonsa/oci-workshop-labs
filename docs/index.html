@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Laboratorios de arquitectura en OCI</title>
+<link rel="stylesheet" href="estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="index.html" class="activo">Inicio</a><a href="despliegue.html">Despliegue</a><a href="modulos/01-elasticidad.html">01</a><a href="modulos/02-seguridad.html">02</a><a href="modulos/03-agente-ia.html">03</a><a href="modulos/04-datos-analitica.html">04</a><a href="modulos/05-observabilidad.html">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Taller técnico · cinco módulos</span>
+  <h1>Laboratorios de arquitectura en OCI</h1>
+  <p class="entradilla">Cinco módulos encadenados: elasticidad, seguridad, un agente de IA con
+  límites, analítica operacional y observabilidad. Cada uno se despliega en un clic, se destruye
+  con un comando, y termina con un entregable escrito.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Los módulos</h2>
+  <p class="sub">Cada uno dura entre 40 y 50 minutos de sesión.</p>
+  <div class="tarjetas"><a class="tarjeta" href="modulos/01-elasticidad.html"><div class="num">MÓDULO 01</div><h3>Arquitectura elástica</h3><p>Un grupo de instancias detrás de un balanceador que crece bajo carga y vuelve a reducirse solo, con el ciclo completo cronometrado.</p><div class="salida">Salida: Backlog priorizado de optimizaciones</div></a><a class="tarjeta" href="modulos/02-seguridad.html"><div class="num">MÓDULO 02</div><h3>Seguridad de extremo a extremo</h3><p>La versión corregida del laboratorio anterior, al lado del original, para comparar las dos con el mismo comando.</p><div class="salida">Salida: Checklist de 39 controles con mínimos por ambiente</div></a><a class="tarjeta" href="modulos/03-agente-ia.html"><div class="num">MÓDULO 03</div><h3>Un agente que no puede hacer daño</h3><p>Un agente responde preguntas en lenguaje natural sobre la infraestructura de los laboratorios anteriores. Lo interesante no es que responda.</p><div class="salida">Salida: Ficha de caso de uso priorizado</div></a><a class="tarjeta" href="modulos/04-datos-analitica.html"><div class="num">MÓDULO 04</div><h3>Datos y analítica operacional</h3><p>Tres millones de documentos sintéticos y un tablero que encuentra dos cosas que el promedio esconde.</p><div class="salida">Salida: Blueprint de fuentes, procesamiento y responsables</div></a><a class="tarjeta" href="modulos/05-observabilidad.html"><div class="num">MÓDULO 05</div><h3>Observabilidad y confiabilidad</h3><p>La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dentro, y el autoescalamiento la apaga sola.</p><div class="salida">Salida: Matriz señal → umbral → responsable → acción</div></a></div>
+</section>
+
+<section>
+  <h2>Por qué están encadenados</h2>
+  <p>No son cinco laboratorios sueltos. El orden es el argumento: la infraestructura del primero
+  se construye <strong>expuesta a propósito</strong> para que el segundo la audite, y el último
+  cierra el círculo convirtiendo en alarma la misma métrica con la que empezó todo.</p>
+  <pre class="cadena">  1 · Elasticidad ──────────────► la infraestructura se construye EXPUESTA a propósito
+        │                                                    │
+        │  métrica de CPU                                    ▼
+        │                          2 · Seguridad ──► audita el laboratorio anterior
+        │                                │            y muestra la versión corregida
+        │                                │ identidad acotada, aislamiento, registro
+        │                                ▼
+        │                          3 · Agente de IA ──► consulta ambos laboratorios; su
+        │                                │              validador hereda esos controles
+        │                                │ ¿de qué datos depende el caso?
+        │                                ▼
+        │                          4 · Datos ──► ¿existen esos datos? ¿quién responde por ellos?
+        │                                │
+        │                                │ señales de negocio
+        ▼                                ▼
+  5 · Observabilidad ◄──────────────────────  la misma métrica del módulo 1, ahora con
+                                              umbral, responsable y acción escrita</pre>
+</section>
+
+<section>
+  <h2>Los entregables</h2>
+  <p class="sub">Se llenan en vivo durante la sesión y se clasifican solos.</p>
+  <p>Cada plantilla se genera desde un script de Python: se edita la lista de controles o de
+  señales, se vuelve a ejecutar, y salen el Excel y su versión en Markdown desde la misma fuente.</p>
+  <table><thead><tr><th>Plantilla</th><th>Qué hace de especial</th></tr></thead>
+  <tbody><tr><td><a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/plantillas/checklist-seguridad"><strong>Checklist de seguridad</strong></a></td><td>39 controles en 9 dominios. Convierte «no sé» en riesgo a validar, y «no» de bajo esfuerzo en quick win. Propone un mínimo por ambiente: 13 controles obligatorios en desarrollo, 25 en pruebas, 30 en producción.</td></tr><tr><td><a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/plantillas/ficha-caso-ia"><strong>Ficha de caso de IA</strong></a></td><td>Ocho candidatos puntuados con cuatro criterios ponderados, y una ficha de 18 campos para el que gane. El criterio «datos» pesa 25 % porque es donde fracasan casi todos los casos de IA.</td></tr><tr><td><a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/plantillas/blueprint-datos"><strong>Blueprint de datos</strong></a></td><td>Inventario de fuentes con dueño, frecuencia y calidad, más un lienzo de seis casillas que empieza por la decisión y no por los datos. Marca en rojo lo que no tiene dueño.</td></tr><tr><td><a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/plantillas/matriz-observabilidad"><strong>Matriz de observabilidad</strong></a></td><td>16 señales en 10 categorías. Calcula la cobertura y marca sola toda alarma que despierte a alguien sin tener acción escrita.</td></tr></tbody></table>
+  <pre><code>pip install openpyxl
+cd plantillas/checklist-seguridad &amp;&amp; python generar_checklist.py</code></pre>
+</section>
+
+<section>
+  <h2>Empezar</h2>
+  <ol class="pasos">
+    <li><h3>Poner los guardarraíles de costo</h3>
+      <p>Un presupuesto con avisos al 50, 75 y 90 %, y una alerta sobre el gasto proyectado.
+      Se despliega en un minuto.</p>
+      <a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/presupuesto-y-alertas.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></li>
+    <li><h3>Desplegar el módulo 1</h3>
+      <p>Es la base de los demás. Entre 5 y 8 minutos.</p>
+      <a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/01-elasticidad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></li>
+    <li><h3>Seguir el manual de cada módulo</h3>
+      <p>Cada página trae el paso a paso y enlaza al manual completo del repositorio.</p></li>
+    <li><h3>Destruir al terminar</h3>
+      <p>Cada módulo trae su script de borrado. El crédito de una cuenta de prueba no vuelve.</p></li>
+  </ol>
+  <div class="aviso"><strong>Antes de desplegar nada</strong>, conviene leer la
+  <a href="despliegue.html">guía de despliegue</a>: límites de servicio, costos y qué revisar
+  en cada región. Los nombres de shapes, reglas del WAF y métricas cambian entre regiones, y
+  eso es lo que más despliegues rompe.</div>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

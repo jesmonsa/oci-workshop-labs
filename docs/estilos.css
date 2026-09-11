@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  --plano:#f9f9f7; --superficie:#fcfcfb; --superficie-2:#f2f1ec;
+  --tinta:#0b0b0b; --tinta-2:#52514e; --tinta-3:#898781;
+  --borde:rgba(11,11,11,.12); --linea:#e1e0d9;
+  --acento:#2a78d6; --acento-suave:#eaf2fd;
+  --alerta:#b25000; --alerta-fondo:#fdf3e8;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+    color-scheme: dark;
+    --plano:#0d0d0d; --superficie:#1a1a19; --superficie-2:#232320;
+    --tinta:#fff; --tinta-2:#c3c2b7; --tinta-3:#898781;
+    --borde:rgba(255,255,255,.14); --linea:#2c2c2a;
+    --acento:#6da7ec; --acento-suave:#16273c;
+    --alerta:#eda100; --alerta-fondo:#2a2313;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plano);color:var(--tinta);
+  font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.envoltura{max-width:960px;margin:0 auto;padding:0 24px}
+a{color:var(--acento);text-decoration:none}
+a:hover{text-decoration:underline}
+nav{border-bottom:1px solid var(--borde);background:var(--superficie);position:sticky;top:0;z-index:10}
+nav .envoltura{display:flex;align-items:center;gap:22px;height:56px;flex-wrap:wrap}
+nav .marca{font-weight:650;color:var(--tinta);letter-spacing:-.01em}
+nav a{font-size:14.5px;color:var(--tinta-2)}
+nav a.activo{color:var(--acento);font-weight:600}
+nav .derecha{margin-left:auto}
+header.principal{padding:56px 0 36px;border-bottom:1px solid var(--borde)}
+h1{font-size:34px;line-height:1.2;letter-spacing:-.025em;margin:0 0 14px}
+.entradilla{font-size:18px;color:var(--tinta-2);max-width:62ch;margin:0}
+.etiqueta{display:inline-block;font-size:12.5px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--acento);margin-bottom:12px}
+main{padding:40px 0 72px}
+section{margin-bottom:44px}
+h2{font-size:22px;letter-spacing:-.015em;margin:0 0 6px}
+h2+.sub{color:var(--tinta-2);margin:0 0 18px;font-size:15px}
+h3{font-size:16.5px;margin:26px 0 8px}
+p{margin:0 0 14px;max-width:70ch}
+ul,ol{max-width:70ch;padding-left:22px}
+li{margin-bottom:7px}
+pre{background:var(--superficie-2);border:1px solid var(--borde);border-radius:8px;
+  padding:16px 18px;overflow-x:auto;font-size:13px;line-height:1.55;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;
+  background:var(--superficie-2);padding:.12em .4em;border-radius:4px}
+pre code{background:none;padding:0;font-size:inherit}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:8px 0 18px}
+th{text-align:left;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;
+  color:var(--tinta-2);padding:0 12px 8px 0;border-bottom:1px solid var(--linea)}
+td{padding:10px 12px 10px 0;border-bottom:1px solid var(--linea);vertical-align:top}
+.tarjetas{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(252px,1fr));margin-top:18px}
+.tarjeta{background:var(--superficie);border:1px solid var(--borde);border-radius:10px;
+  padding:18px 20px;display:block;color:inherit}
+a.tarjeta:hover{border-color:var(--acento);text-decoration:none}
+.tarjeta .num{font-size:12px;font-weight:700;color:var(--acento);letter-spacing:.06em}
+.tarjeta h3{margin:5px 0 7px;font-size:17px}
+.tarjeta p{font-size:14px;color:var(--tinta-2);margin:0}
+.salida{margin-top:12px;font-size:12.5px;color:var(--tinta-3);border-top:1px solid var(--linea);padding-top:9px}
+.aviso{background:var(--alerta-fondo);border-left:3px solid var(--alerta);
+  border-radius:0 7px 7px 0;padding:14px 18px;margin:20px 0;font-size:14.5px;color:var(--tinta-2)}
+.aviso strong{color:var(--tinta)}
+.nota{background:var(--acento-suave);border-left:3px solid var(--acento);
+  border-radius:0 7px 7px 0;padding:14px 18px;margin:20px 0;font-size:14.5px;color:var(--tinta-2)}
+.nota strong{color:var(--tinta)}
+.desplegar{display:inline-block;margin:6px 0}
+.desplegar img{height:34px;vertical-align:middle}
+.pasos{counter-reset:paso;list-style:none;padding:0;max-width:none}
+.pasos>li{counter-increment:paso;position:relative;padding:0 0 4px 42px;margin-bottom:22px}
+.pasos>li::before{content:counter(paso);position:absolute;left:0;top:-1px;width:27px;height:27px;
+  border-radius:50%;background:var(--acento);color:#fff;font-size:13.5px;font-weight:650;
+  display:flex;align-items:center;justify-content:center}
+.pasos h3{margin:0 0 6px;font-size:16px}
+footer{border-top:1px solid var(--borde);padding:26px 0 44px;color:var(--tinta-3);font-size:13.5px}
+.cadena{font-size:12.5px;line-height:1.5}
+@media (max-width:640px){h1{font-size:27px}.entradilla{font-size:16.5px}nav .envoltura{height:auto;padding-top:10px;padding-bottom:10px}}

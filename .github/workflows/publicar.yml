@@ -1,0 +1,58 @@
+name: Publicar stacks y sitio
+
+# Dos cosas al etiquetar una versión:
+#   1. Empaqueta un ZIP por stack y lo publica como activo de la release. Esa URL
+#      es la que usa el botón «Deploy to Oracle Cloud»: Resource Manager descarga
+#      el ZIP de forma anónima, así que el repositorio tiene que ser público.
+#   2. Publica el sitio de docs/ en GitHub Pages.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  stacks:
+    name: Empaquetar y publicar stacks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Empaquetar
+        run: |
+          chmod +x scripts/empaquetar-stacks.sh
+          ./scripts/empaquetar-stacks.sh
+      - name: Publicar como release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+          body: |
+            Stacks listos para Oracle Cloud Resource Manager.
+
+            Cada ZIP contiene la configuración de Terraform de un módulo, con su
+            `schema.yaml`, en la raíz del archivo — que es lo que Resource Manager
+            espera.
+
+            Los botones de despliegue del sitio apuntan a `releases/latest`, así que
+            al publicar esta versión quedan actualizados solos.
+
+  sitio:
+    name: Publicar el sitio
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: despliegue
+        uses: actions/deploy-pages@v4

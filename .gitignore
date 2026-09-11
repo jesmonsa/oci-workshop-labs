@@ -1,0 +1,35 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+terraform.tfvars
+*.auto.tfvars
+.terraform.lock.hcl
+
+# Credenciales — nunca
+*.pem
+oci_api_key*
+.oci/
+
+# Paquetes generados
+dist/
+
+# Datos y salidas generadas
+**/datos/*.csv
+**/datos/resultados.json
+**/datos/tablero.html
+**/*.xlsx
+**/bitacora-agente.jsonl
+**/.comando-*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Sistema
+.DS_Store
+Thumbs.db
+~$*

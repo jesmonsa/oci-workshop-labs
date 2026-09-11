@@ -1,0 +1,20 @@
+# Copiar a terraform.tfvars y completar. Los OCIDs son ficticios.
+# La contraseña NO va aquí: exportar TF_VAR_admin_password antes del apply.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaEJEMPLO"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaaaEJEMPLO"  # lab-04-datos
+region           = "us-ashburn-1"
+
+config_file_profile = ""
+owner               = "equipo-cloud"
+
+# curl -s ifconfig.me   (en la preparación en la sala será otra)
+ips_admin_cidr = ["190.0.0.0/32"]
+
+# Verificar con: oci mysql shape list --compartment-id <compartment>
+shape_mysql       = "MySQL.2"
+almacenamiento_gb = 50
+admin_usuario     = "admin"
+
+# El acelerador cuesta aparte. Encender solo tras revisar límites y crédito.
+crear_cluster_heatwave = false

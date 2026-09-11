@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulo 03 · Un agente que no puede hacer daño</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html" class="activo">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Módulo 03</span>
+  <h1>Un agente que no puede hacer daño</h1>
+  <p class="entradilla">Un agente responde preguntas en lenguaje natural sobre la infraestructura de los laboratorios anteriores. Lo interesante no es que responda.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Qué demuestra</h2>
+  <ul><li><strong>El modelo no ejecuta nada.</strong> Propone una herramienta de un catálogo cerrado; un validador escrito por una persona decide si se ejecuta.</li><li>No existe ninguna herramienta de escritura. No está deshabilitada por configuración: no está en el código.</li><li>Una petición de cambio —«apaga esa instancia»— se rechaza. Y una inyección de instrucciones —«ignora tus instrucciones anteriores»— también, por la misma vía.</li><li>Todo queda en una bitácora: la pregunta, lo que propuso el modelo, lo que decidió el validador y lo que se ejecutó. Sin registro no hay agente auditable.</li></ul>
+  <div class="salida" style="margin-top:16px"><strong>Salida del ejercicio:</strong>
+    Ficha de caso de uso priorizado</div>
+</section>
+
+<section>
+  <h2>Arquitectura</h2>
+  <pre class="cadena">   pregunta en                                              consulta de
+   lenguaje natural                                         solo lectura
+        │                                                          ▲
+        ▼                                                          │
+  ┌─────────────┐    propone     ┌──────────────┐    permite   ┌───┴──────┐
+  │PLANIFICADOR │ ─────────────► │  VALIDADOR   │ ───────────► │ CATÁLOGO │
+  │ (el modelo) │  {herramienta} │ (código, sin │              │8 lecturas│
+  └─────────────┘                │      IA)     │              └──────────┘
+                                 └──────┬───────┘
+                                        │ rechaza
+                                        ▼
+                                no se ejecuta nada</pre>
+</section>
+
+<section>
+  <h2>Desplegar</h2>
+  <p class="nota">Este módulo <strong>no despliega infraestructura</strong>: es un programa que se ejecuta contra los laboratorios anteriores.</p>
+  <p style="margin-top:14px">También se puede ejecutar con Terraform desde un equipo:
+  <a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/labs/03-agente-ia">ver la carpeta del módulo</a>.</p>
+</section>
+
+<section>
+  <h2>Paso a paso</h2>
+  <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
+    <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/03-agente-ia/docs/MANUAL.md">el manual del módulo</a>.</p>
+  <ol class="pasos"><li><h3>Instalar y probar sin credenciales</h3><p><code>--catalogo</code> muestra las ocho herramientas y <code>--autoprueba</code> ejercita la capa de validación. Los dos funcionan sin cuenta de nube y sin modelo: si fallan, el problema es el entorno.</p></li><li><h3>Comprobar si hay modelos disponibles</h3><p>El servicio de IA generativa no está en todas las regiones. El agente descubre el modelo por su cuenta en vez de traer un identificador fijo, que es la forma más segura de que algo falle meses después.</p></li><li><h3>Preguntar contra el laboratorio</h3><p>«¿cuántas máquinas hay corriendo?», «¿alguna tiene IP pública?», «¿cuánto llevamos gastando este mes?». Cada respuesta imprime tres líneas: lo que propuso el modelo, lo que decidió el validador, y el resultado.</p></li><li><h3>Pedirle algo que no debe hacer</h3><p>«apaga la instancia app-1». Termina en <code>RECHAZADA · no se ejecutó nada</code>. Es el momento que sostiene el módulo.</p></li><li><h3>Intentar una inyección de instrucciones</h3><p>Mismo rechazo. Ninguna instrucción escrita puede sacar al agente de su catálogo, porque el catálogo no se decide con texto.</p></li><li><h3>Leer la bitácora</h3><p>Una línea por interacción. No guarda los datos devueltos, solo cuántas filas: una bitácora que copia lo consultado se convierte ella misma en un problema de seguridad.</p></li></ol>
+</section>
+
+<section>
+  <h2>Qué se simplificó, y por qué</h2>
+  <p>Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal. Esto es
+  lo que este módulo simplifica a propósito:</p>
+  <table><tbody><tr><td><strong>El agente no entiende el negocio</strong></td><td>Elige entre ocho consultas. Decirlo en voz alta da más credibilidad que exagerar lo que hace.</td></tr><tr><td><strong>Funciona sin modelo</strong></td><td>Con <code>--sin-llm</code> el traductor es un emparejador de palabras clave. La demostración sirve igual, y el argumento se ve más claro: la seguridad nunca estuvo en el modelo.</td></tr><tr><td><strong>Ampliar el catálogo son ocho líneas</strong></td><td>Pero solo con funciones de lectura. Una acción de escritura no se agrega ahí: se diseña con aprobación humana explícita y alcance acotado, y eso ya es otro proyecto.</td></tr></tbody></table>
+</section>
+
+<section>
+  <h2>Cómo se relaciona con los demás</h2>
+  <p>Consulta los laboratorios de los <a href='01-elasticidad.html'>módulos 1</a> y <a href='02-seguridad.html'>2</a>, y su validador es la aplicación directa de los controles del módulo 2. El caso de uso que se elija define de qué datos depende — que es con lo que abre el <a href='04-datos-analitica.html'>módulo 4</a>.</p>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

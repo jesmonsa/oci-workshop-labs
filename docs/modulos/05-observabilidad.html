@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulo 05 · Observabilidad y confiabilidad</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html" class="activo">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Módulo 05</span>
+  <h1>Observabilidad y confiabilidad</h1>
+  <p class="entradilla">La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dentro, y el autoescalamiento la apaga sola.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Qué demuestra</h2>
+  <ul><li><strong>El correo trae el runbook enlazado.</strong> Quien lo recibe de madrugada no busca en ningún wiki. Eso es lo que baja el tiempo de recuperación: no el tablero, no la herramienta.</li><li><strong>La alarma se cierra sola</strong>, porque el autoescalamiento reaccionó. ¿Debía despertar a alguien? No. ¿Debía desaparecer sin rastro? Tampoco. Distinguir lo que se atiende ahora de lo que hay que saber es lo que separa a un equipo que apaga incendios de uno que opera.</li><li>El estado «sin datos»: una alarma ciega se ve exactamente igual que una tranquila. Es el estado más peligroso de un modelo de observabilidad.</li><li>Una alarma que despierta a alguien sin acción escrita es <strong>ruido</strong>, y el ruido es lo que hace que en seis meses nadie mire las que sí importan.</li></ul>
+  <div class="salida" style="margin-top:16px"><strong>Salida del ejercicio:</strong>
+    Matriz señal → umbral → responsable → acción</div>
+</section>
+
+<section>
+  <h2>Arquitectura</h2>
+  <pre class="cadena">  carga ──► CPU sube ──► alarma DISPARA ──► correo con el runbook dentro
+                                 │
+                   el autoescalamiento agrega instancias
+                                 │
+          CPU por instancia baja ──► la alarma SE CIERRA SOLA
+                                      (queda registrada, no despierta a nadie)</pre>
+</section>
+
+<section>
+  <h2>Desplegar</h2>
+  <a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/05-observabilidad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a>
+  <p style="margin-top:14px">También se puede ejecutar con Terraform desde un equipo:
+  <a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/labs/05-observabilidad">ver la carpeta del módulo</a>.</p>
+</section>
+
+<section>
+  <h2>Paso a paso</h2>
+  <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
+    <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/05-observabilidad/docs/MANUAL.md">el manual del módulo</a>.</p>
+  <ol class="pasos"><li><h3>Verificar los nombres de métrica</h3><p>Una alarma sobre una métrica que no existe <strong>se crea sin error y nunca suena</strong>. En la consola se ve perfecta. Es la peor forma de fallar.</p></li><li><h3>Desplegar</h3><p>Menos de un minuto: son tres recursos.</p></li><li><h3>Confirmar la suscripción de correo</h3><p>Hasta ese clic, la alarma dispara igual y la bandeja de entrada sigue vacía. Es el fallo más común y el más frustrante.</p></li><li><h3>Comprobar que las alarmas ven datos</h3><p>El panel distingue tres estados. El tercero, «sin datos», no es calma: es ceguera.</p></li><li><h3>Medir el ciclo completo</h3><p>El script arranca la carga, cronometra cuánto tarda en disparar y cuánto en cerrarse sola, y lo anota. Sin ese número no se puede cronometrar una demostración.</p></li><li><h3>Capturar el correo</h3><p>Con el enlace al runbook visible. Es la imagen del módulo.</p></li></ol>
+</section>
+
+<section>
+  <h2>Qué se simplificó, y por qué</h2>
+  <p>Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal. Esto es
+  lo que este módulo simplifica a propósito:</p>
+  <table><tbody><tr><td><strong>Solo dos alarmas</strong></td><td>Una de causa (saturación) y una de síntoma (servidores caídos). Con esas dos alcanza para mostrar que la severidad la define el impacto, no la magnitud de la métrica.</td></tr><tr><td><strong>El umbral es más bajo que el del autoescalamiento</strong></td><td>A propósito: así la alarma suena primero y el autoescalamiento la apaga después. Ese orden es lo que hace entendible la conversación sobre alarmas que se resuelven solas.</td></tr><tr><td><strong>Falta lo que un modelo completo necesita</strong></td><td>Registros centralizados, trazas distribuidas, prueba sintética desde fuera y revisión periódica. Lo que se muestra es el mínimo viable — y el mínimo viable es justo lo que se puede tener en dos semanas.</td></tr></tbody></table>
+</section>
+
+<section>
+  <h2>Cómo se relaciona con los demás</h2>
+  <p>Cierra el círculo: convierte en alarma la misma métrica que disparaba el autoescalamiento en el <a href='01-elasticidad.html'>módulo 1</a>, incorpora la alerta de cambios críticos del <a href='02-seguridad.html'>módulo 2</a> y las señales de negocio del <a href='04-datos-analitica.html'>módulo 4</a>.</p>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

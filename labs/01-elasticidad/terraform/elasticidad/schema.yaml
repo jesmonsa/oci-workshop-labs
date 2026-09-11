@@ -1,0 +1,184 @@
+title: "Módulo 1 · Arquitectura elástica"
+description: "Balanceador, grupo de instancias y autoescalamiento por CPU. Demuestra el ciclo completo: la carga sube, el pool crece, la carga baja y el pool se reduce solo."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Ubicación"
+    variables: ["compartment_ocid", "ad_index"]
+  - title: "Acceso"
+    variables: ["ssh_public_key", "mi_ip_cidr", "owner"]
+  - title: "Cómputo"
+    variables: ["shape", "ocpus", "memory_in_gbs"]
+  - title: "Elasticidad"
+    variables:
+      - "pool_min"
+      - "pool_max"
+      - "scale_out_threshold"
+      - "scale_out_step"
+      - "scale_in_threshold"
+      - "scale_in_step"
+      - "cooldown_seconds"
+  - title: "Balanceador"
+    variables: ["lb_min_mbps", "lb_max_mbps"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["tenancy_ocid", "region", "config_file_profile"]
+
+variables:
+  tenancy_ocid:
+    type: string
+    title: "Tenancy"
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+    description: "Se deja vacío en Resource Manager. Solo aplica al ejecutar Terraform desde un equipo."
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    description: "Dónde se crean los recursos. Usar un compartment dedicado al laboratorio, nunca el raíz: el borrado del final depende de esa separación."
+    required: true
+  ad_index:
+    type: integer
+    title: "Dominio de disponibilidad"
+    description: "0 si la región tiene uno solo."
+    default: 0
+    minimum: 0
+    maximum: 2
+
+  ssh_public_key:
+    type: string
+    title: "Llave pública SSH"
+    description: "El contenido de la llave (ssh-rsa AAAA...), no la ruta al archivo."
+    required: true
+    multiline: true
+  mi_ip_cidr:
+    type: string
+    title: "Tu IP pública, en CIDR"
+    description: "Desde dónde se permite SSH. Obtenerla con: curl -s ifconfig.me — y agregarle /32. NUNCA 0.0.0.0/0."
+    required: true
+    default: "0.0.0.0/32"
+    pattern: "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(3[0-2]|[12]?[0-9])$"
+  owner:
+    type: string
+    title: "Responsable"
+    description: "Va en las etiquetas de los recursos. Sirve para el reporte de costo por responsable."
+    default: "equipo-cloud"
+
+  shape:
+    type: oci:core:instanceshape:name
+    title: "Shape de cómputo"
+    default: "VM.Standard.E4.Flex"
+    dependsOn:
+      compartmentId: compartment_ocid
+  ocpus:
+    type: integer
+    title: "OCPUs por instancia"
+    description: "1 basta: con máquinas pequeñas la CPU sube rápido y el escalamiento se ve dentro del tiempo de una demostración."
+    default: 1
+    minimum: 1
+    maximum: 8
+  memory_in_gbs:
+    type: integer
+    title: "Memoria por instancia (GB)"
+    default: 8
+    minimum: 1
+    maximum: 128
+
+  pool_min:
+    type: integer
+    title: "Tamaño mínimo del grupo"
+    default: 2
+    minimum: 1
+    maximum: 10
+  pool_max:
+    type: integer
+    title: "Tamaño máximo del grupo"
+    description: "Revisar los límites de servicio de la cuenta antes de subirlo."
+    default: 6
+    minimum: 2
+    maximum: 20
+  scale_out_threshold:
+    type: integer
+    title: "% de CPU para agregar capacidad"
+    default: 55
+    minimum: 10
+    maximum: 95
+  scale_out_step:
+    type: integer
+    title: "Instancias que se agregan por disparo"
+    description: "2 hace el cambio más visible que 1."
+    default: 2
+    minimum: 1
+    maximum: 5
+  scale_in_threshold:
+    type: integer
+    title: "% de CPU para retirar capacidad"
+    description: "Esta es la mitad que casi nadie configura, y la que baja la factura."
+    default: 20
+    minimum: 5
+    maximum: 90
+  scale_in_step:
+    type: integer
+    title: "Instancias que se retiran por disparo"
+    description: "Menor que el paso de salida a propósito: se baja con más cautela de la que se sube."
+    default: 1
+    minimum: 1
+    maximum: 5
+  cooldown_seconds:
+    type: integer
+    title: "Enfriamiento entre acciones (segundos)"
+    description: "No bajar de 300: por debajo aparece oscilación, que es justo el antipatrón que no se quiere mostrar."
+    default: 300
+    minimum: 300
+    maximum: 3600
+
+  lb_min_mbps:
+    type: integer
+    title: "Ancho de banda mínimo del balanceador (Mbps)"
+    default: 10
+    minimum: 10
+    maximum: 8000
+  lb_max_mbps:
+    type: integer
+    title: "Ancho de banda máximo del balanceador (Mbps)"
+    default: 100
+    minimum: 10
+    maximum: 8000
+
+outputGroups:
+  - title: "Para la demostración"
+    outputs: ["lb_url", "resumen_demo"]
+  - title: "Identificadores"
+    outputs: ["instance_pool_id", "load_balancer_id", "backend_set_name", "autoscaling_configuration_id"]
+
+outputs:
+  lb_url:
+    type: link
+    title: "URL del balanceador"
+    displayText: "Abrir la aplicación"
+    visible: true
+  resumen_demo:
+    type: string
+    title: "Configuración de la demostración"
+    visible: true
+  instance_pool_id:
+    type: string
+    title: "Grupo de instancias"
+  load_balancer_id:
+    type: string
+    title: "Balanceador"
+  backend_set_name:
+    type: string
+    title: "Backend set"
+  autoscaling_configuration_id:
+    type: string
+    title: "Configuración de autoescalamiento"

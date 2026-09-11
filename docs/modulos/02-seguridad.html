@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulo 02 · Seguridad de extremo a extremo</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html" class="activo">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Módulo 02</span>
+  <h1>Seguridad de extremo a extremo</h1>
+  <p class="entradilla">La versión corregida del laboratorio anterior, al lado del original, para comparar las dos con el mismo comando.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Qué demuestra</h2>
+  <ul><li><strong>Detectar:</strong> un script de solo lectura audita el módulo 1 y encuentra lo que se dejó abierto a propósito. Se puede entregar al cliente para que lo corra en su propia cuenta.</li><li><strong>Proteger el borde:</strong> el mismo ataque devuelve 200 contra el balanceador sin WAF y 403 contra el que sí lo tiene.</li><li><strong>Entrar sin puertas abiertas:</strong> sesión administrativa por Bastion hacia una instancia sin IP pública. El puerto 22 existe, pero solo desde una IP.</li><li><strong>Prevenir:</strong> una Security Zone rechaza crear un bucket público, y deja crear el privado.</li></ul>
+  <div class="salida" style="margin-top:16px"><strong>Salida del ejercicio:</strong>
+    Checklist de 39 controles con mínimos por ambiente</div>
+</section>
+
+<section>
+  <h2>Arquitectura</h2>
+  <pre class="cadena">      ANTES (módulo 1)                      DESPUÉS (módulo 2)
+ ┌──────────────────────────┐   ┌────────────────────────────────────┐
+ │ subred pública           │   │ pública   [LB + WAF]  ← solo esto  │
+ │  [LB sin WAF]            │   │              │ NSG: 80 solo del LB │
+ │  [app-1 con IP pública]  │   │ privada   [app-1] [app-2] sin IP   │
+ │  [app-2 con IP pública]  │   │              │ NSG: BD solo de app │
+ │  lista por defecto:      │   │ privada   [datos] sin internet     │
+ │  puerto 22 ← 0.0.0.0/0   │   │ Bastion → 22 solo desde su endpoint│
+ └──────────────────────────┘   │ Registro de red · alertas de cambio│
+                                └────────────────────────────────────┘</pre>
+</section>
+
+<section>
+  <h2>Desplegar</h2>
+  <a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/02-seguridad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a>
+  <p style="margin-top:14px">También se puede ejecutar con Terraform desde un equipo:
+  <a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/labs/02-seguridad">ver la carpeta del módulo</a>.</p>
+</section>
+
+<section>
+  <h2>Paso a paso</h2>
+  <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
+    <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/02-seguridad/docs/MANUAL.md">el manual del módulo</a>.</p>
+  <ol class="pasos"><li><h3>Activar la postura antes que nada</h3><p>Cloud Guard tarda en acumular hallazgos: encenderlo el mismo día de la sesión es encenderlo tarde.</p></li><li><h3>Verificar las reglas del WAF</h3><p>Las claves de las capacidades de protección cambian entre regiones. El manual trae el comando; hacerlo antes del primer despliegue.</p></li><li><h3>Desplegar el laboratorio seguro</h3><p>Entre 8 y 12 minutos.</p></li><li><h3>Auditar el módulo 1</h3><p><code>./scripts/10-auditoria-rapida.sh</code> contra el compartment del laboratorio anterior. Debe encontrar varios hallazgos altos. Correrlo también contra este: casi todo debe salir limpio. Que encuentre cosas en uno y no en el otro es la mejor prueba de que el script funciona.</p></li><li><h3>Comparar los dos balanceadores</h3><p><code>./scripts/20-prueba-waf.sh</code> imprime una tabla de dos columnas con los códigos HTTP. Se lee de un vistazo.</p></li><li><h3>Entrar por el bastión</h3><p>Crear la sesión toma uno o dos minutos: conviene hacerlo antes, no en vivo.</p></li></ol>
+</section>
+
+<section>
+  <h2>Qué se simplificó, y por qué</h2>
+  <p>Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal. Esto es
+  lo que este módulo simplifica a propósito:</p>
+  <table><tbody><tr><td><strong>El balanceador escucha en HTTP, no en HTTPS</strong></td><td>Para no depender de un certificado en el laboratorio. En producción es 443 con certificado gestionado y el 80 solo redirige — es el control B-03 del checklist.</td></tr><tr><td><strong>La base de datos no se despliega</strong></td><td>La capa de datos existe en la red, con sus reglas, para que el diagrama de tres capas quede completo y se pueda mostrar.</td></tr><tr><td><strong>El origen permitido hacia la base es el CIDR de la subred</strong></td><td>Y no la IP exacta del endpoint del bastión, porque referenciarla crearía una dependencia circular. En esa subred solo hay dos cosas, así que el alcance real es el mismo.</td></tr></tbody></table>
+</section>
+
+<section>
+  <h2>Cómo se relaciona con los demás</h2>
+  <p>Audita el <a href='01-elasticidad.html'>módulo 1</a>. Sus tres controles de identidad, aislamiento y registro son los que hereda el validador del <a href='03-agente-ia.html'>módulo 3</a>, y su alerta de cambios críticos aparece como señal en el <a href='05-observabilidad.html'>módulo 5</a>.</p>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

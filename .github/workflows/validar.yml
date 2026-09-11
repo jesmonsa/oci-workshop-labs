@@ -1,0 +1,83 @@
+name: Validar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform · fmt y validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - labs/01-elasticidad/terraform/elasticidad
+          - labs/01-elasticidad/terraform/finops
+          - labs/02-seguridad/terraform/seguro
+          - labs/04-datos-analitica/terraform/heatwave
+          - labs/05-observabilidad/terraform/observabilidad
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -diff -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+
+      # Un stack sin schema.yaml se despliega igual, pero Resource Manager pide las
+      # variables sueltas en vez de mostrar un formulario. Se trata como error.
+      - name: Existe schema.yaml
+        run: test -f schema.yaml
+
+  scripts:
+    name: Scripts · sintaxis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bash
+        run: |
+          for f in $(find . -name '*.sh'); do bash -n "$f" || exit 1; done
+          echo "Todos los scripts pasan la verificación de sintaxis."
+      - name: Python
+        run: |
+          pip install --quiet openpyxl
+          python -m compileall -q labs plantillas
+          echo "Todo el Python compila."
+
+  plantillas:
+    name: Plantillas · se generan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet openpyxl
+      # Los generadores son la fuente única de cada entregable: si uno se rompe, el
+      # taller se queda sin su salida. Por eso se ejecutan en cada cambio.
+      - name: Generar los cuatro entregables
+        run: |
+          for d in plantillas/*/; do
+            script=$(find "$d" -maxdepth 1 -name 'generar_*.py' | head -1)
+            [ -z "$script" ] && continue
+            echo "--- $script"
+            (cd "$d" && python "$(basename "$script")")
+          done
+      - name: Los archivos se crearon
+        run: |
+          n=$(find plantillas -name '*.xlsx' | wc -l)
+          echo "$n archivo(s) generado(s)"
+          test "$n" -ge 4

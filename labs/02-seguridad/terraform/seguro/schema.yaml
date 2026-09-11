@@ -1,0 +1,155 @@
+title: "Módulo 2 · Arquitectura segura"
+description: "Red en tres capas, NSGs por función, WAF con reglas OWASP, Bastion y registro de tráfico. Es la versión corregida del laboratorio del módulo 1, que se construyó expuesto a propósito."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Ubicación"
+    variables: ["compartment_ocid", "ad_index"]
+  - title: "Acceso administrativo"
+    variables: ["ssh_public_key", "ips_admin_cidr", "owner"]
+  - title: "Cómputo"
+    variables: ["shape", "ocpus", "memory_in_gbs", "num_instancias"]
+  - title: "WAF"
+    variables: ["waf_capacidades", "waf_version_capacidad", "waf_bloquear_admin"]
+  - title: "Alertas"
+    variables: ["email_alertas"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["tenancy_ocid", "region", "config_file_profile"]
+
+variables:
+  tenancy_ocid:
+    type: string
+    title: "Tenancy"
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    required: true
+  ad_index:
+    type: integer
+    title: "Dominio de disponibilidad"
+    default: 0
+    minimum: 0
+    maximum: 2
+
+  ssh_public_key:
+    type: string
+    title: "Llave pública SSH"
+    description: "Solo se usa a través del bastión: las instancias no tienen IP pública."
+    required: true
+    multiline: true
+  ips_admin_cidr:
+    type: array
+    title: "IPs permitidas para abrir sesiones de bastión"
+    description: "En CIDR. Si se va a usar desde otra red (una sala de reuniones, por ejemplo), hay que agregar esa IP: el cambio se aplica en caliente."
+    items:
+      type: string
+      pattern: "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/(3[0-2]|[12]?[0-9])$"
+    required: true
+    default: ["0.0.0.0/32"]
+  owner:
+    type: string
+    title: "Responsable"
+    default: "equipo-cloud"
+
+  shape:
+    type: oci:core:instanceshape:name
+    title: "Shape de cómputo"
+    default: "VM.Standard.E4.Flex"
+    dependsOn:
+      compartmentId: compartment_ocid
+  ocpus:
+    type: integer
+    title: "OCPUs por instancia"
+    default: 1
+    minimum: 1
+    maximum: 8
+  memory_in_gbs:
+    type: integer
+    title: "Memoria por instancia (GB)"
+    default: 8
+    minimum: 1
+    maximum: 128
+  num_instancias:
+    type: integer
+    title: "Instancias de aplicación"
+    description: "Dos bastan para mostrar el balanceo. Aquí no hay autoescalamiento: eso es el módulo 1."
+    default: 2
+    minimum: 1
+    maximum: 5
+
+  waf_capacidades:
+    type: array
+    title: "Reglas de protección del WAF"
+    description: "941100 = XSS · 942100 = inyección SQL. Verificar que existan en la región antes de desplegar: oci waf protection-capability list --compartment-id <tenancy> --key 941100"
+    items:
+      type: string
+    default: ["941100", "942100"]
+  waf_version_capacidad:
+    type: integer
+    title: "Versión de las reglas"
+    default: 1
+    minimum: 1
+    maximum: 10
+  waf_bloquear_admin:
+    type: boolean
+    title: "Bloquear la ruta /admin"
+    description: "Regla de control de acceso por ruta. Si el despliegue falla mencionando la condición, desactivarla: la demostración solo pierde una fila."
+    default: true
+
+  email_alertas:
+    type: string
+    title: "Correo para alertas de cambios críticos"
+    description: "Avisa cuando alguien modifica reglas de red o políticas de identidad. Hay que confirmar la suscripción desde el correo."
+    required: true
+    pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+
+outputGroups:
+  - title: "Para la demostración"
+    outputs: ["lb_url", "instancia_ips_privadas", "bastion_endpoint_ip"]
+  - title: "Identificadores"
+    outputs: ["bastion_id", "waf_id", "topic_alertas_id", "instancia_ids", "lb_ip"]
+
+outputs:
+  lb_url:
+    type: link
+    title: "URL del balanceador (con WAF)"
+    displayText: "Abrir la aplicación"
+    visible: true
+  instancia_ips_privadas:
+    type: string
+    title: "IPs de las instancias"
+    description: "Privadas, por diseño."
+    visible: true
+  bastion_endpoint_ip:
+    type: string
+    title: "IP del endpoint del bastión"
+    description: "El único origen desde el que se abre el puerto 22."
+    visible: true
+  bastion_id:
+    type: string
+    title: "Bastión"
+  waf_id:
+    type: string
+    title: "WAF"
+  topic_alertas_id:
+    type: string
+    title: "Tema de notificaciones"
+  instancia_ids:
+    type: string
+    title: "Instancias"
+  lb_ip:
+    type: string
+    title: "IP del balanceador"

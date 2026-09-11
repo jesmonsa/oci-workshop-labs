@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulo 01 · Arquitectura elástica</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html" class="activo">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Módulo 01</span>
+  <h1>Arquitectura elástica</h1>
+  <p class="entradilla">Un grupo de instancias detrás de un balanceador que crece bajo carga y vuelve a reducirse solo, con el ciclo completo cronometrado.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Qué demuestra</h2>
+  <ul><li>Elasticidad horizontal real: de 2 a 6 instancias y de vuelta, con el balanceador incorporando cada servidor nuevo cuando pasa su verificación de salud.</li><li><strong>El scale-in</strong>, que es la mitad que casi nadie configura. Escalar hacia arriba salva la experiencia; escalar hacia abajo es lo que salva la factura.</li><li>El costo de escalar verticalmente: la ventana de indisponibilidad al redimensionar una máquina, medida, no citada.</li><li>FinOps que se activa el mismo día: presupuesto, alertas por umbral y por proyección, y reporte de costo por etiqueta.</li></ul>
+  <div class="salida" style="margin-top:16px"><strong>Salida del ejercicio:</strong>
+    Backlog priorizado de optimizaciones</div>
+</section>
+
+<section>
+  <h2>Arquitectura</h2>
+  <pre class="cadena">                       Internet
+                          │
+                 ┌────────▼────────┐
+                 │  Load Balancer  │  flexible · health check /health
+                 └────────┬────────┘
+        ┌─────────────────┼─────────────────┐
+   ┌────▼────┐       ┌────▼────┐       ┌────▼────┐
+   │  app-1  │       │  app-2  │  ...  │  app-N  │   2 → 6 instancias
+   └─────────┘       └─────────┘       └─────────┘
+                          │
+              métrica de CPU del grupo
+                          │
+                 ┌────────▼─────────┐
+                 │  Autoescalamiento│  CPU &gt; 55 % → +2   (máx. 6)
+                 └──────────────────┘  CPU &lt; 20 % → −1   (mín. 2)</pre>
+</section>
+
+<section>
+  <h2>Desplegar</h2>
+  <a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/01-elasticidad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a>
+  <p style="margin-top:14px">También se puede ejecutar con Terraform desde un equipo:
+  <a href="https://github.com/jesmonsa/oci-workshop-labs/tree/main/labs/01-elasticidad">ver la carpeta del módulo</a>.</p>
+</section>
+
+<section>
+  <h2>Paso a paso</h2>
+  <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
+    <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/01-elasticidad/docs/MANUAL.md">el manual del módulo</a>.</p>
+  <ol class="pasos"><li><h3>Poner los guardarraíles de costo</h3><p>Antes de crear nada. Es un despliegue de un minuto que avisa antes de que el gasto ocurra, y el crédito de una cuenta de prueba no vuelve.</p></li><li><h3>Desplegar el laboratorio</h3><p>Con el botón, o con <code>terraform apply</code>. Entre 5 y 8 minutos: el balanceador es lo más lento.</p></li><li><h3>Comprobar que responde</h3><p><code>curl</code> a la URL del balanceador dos veces seguidas: el nombre del host debe alternar. Si no alterna, hay un solo backend sano.</p></li><li><h3>Medir el ciclo</h3><p>Generar carga y cronometrar tres momentos: cuándo cruza el umbral la métrica, cuándo arranca la instancia nueva, y cuándo empieza a atender tráfico. <strong>Ese último número es el que importa</strong>: define cuánto colchón hace falta por encima de la demanda.</p></li><li><h3>Cortar la carga y mirar el scale-in</h3><p>Tarda más que la subida, a propósito: se baja con más cautela de la que se sube.</p></li><li><h3>Destruir</h3><p><code>./scripts/99-destroy.sh</code>. Todos los días.</p></li></ol>
+</section>
+
+<section>
+  <h2>Qué se simplificó, y por qué</h2>
+  <p>Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal. Esto es
+  lo que este módulo simplifica a propósito:</p>
+  <table><tbody><tr><td><strong>La aplicación vive en una subred pública</strong></td><td>Es deliberado. En una arquitectura real va en subred privada detrás del balanceador — y el <a href='02-seguridad.html'>módulo 2</a> empieza auditando exactamente esto.</td></tr><tr><td><strong>El acceso SSH está restringido a una sola IP</strong></td><td>Si aparece <code>0.0.0.0/0</code> en la configuración, el laboratorio no se levanta: en una cuenta nueva los escaneos empiezan en minutos.</td></tr><tr><td><strong>Los umbrales son agresivos</strong></td><td>Están puestos para que el escalamiento se vea dentro del tiempo de una sesión. En producción serían más conservadores.</td></tr></tbody></table>
+</section>
+
+<section>
+  <h2>Cómo se relaciona con los demás</h2>
+  <p>Todo lo que sigue se monta encima de este laboratorio. El <a href='02-seguridad.html'>módulo 2</a> lo audita, el <a href='03-agente-ia.html'>módulo 3</a> lo consulta, y el <a href='05-observabilidad.html'>módulo 5</a> convierte su métrica de CPU en una alarma con responsable.</p>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

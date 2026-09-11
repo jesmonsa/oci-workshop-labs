@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Despliegue · Laboratorios OCI</title>
+<link rel="stylesheet" href="estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="index.html">Inicio</a><a href="despliegue.html" class="activo">Despliegue</a><a href="modulos/01-elasticidad.html">01</a><a href="modulos/02-seguridad.html">02</a><a href="modulos/03-agente-ia.html">03</a><a href="modulos/04-datos-analitica.html">04</a><a href="modulos/05-observabilidad.html">05</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+
+<header class="principal"><div class="envoltura">
+  <span class="etiqueta">Guía</span>
+  <h1>Despliegue</h1>
+  <p class="entradilla">Cómo llevar cada módulo a una cuenta de OCI en un clic, qué revisar antes,
+  y cómo no gastarse el crédito sin darse cuenta.</p>
+</div></header>
+
+<main><div class="envoltura">
+
+<section>
+  <h2>Cómo funciona el botón</h2>
+  <p>Cada botón abre Oracle Cloud Resource Manager con un archivo ZIP preparado: la configuración
+  de Terraform de ese módulo, junto a un <code>schema.yaml</code> que convierte las variables en
+  un formulario con descripciones y valores por defecto, en vez de una lista de campos sueltos.</p>
+  <ol class="pasos">
+    <li><h3>Se abre la consola de OCI</h3><p>Hay que iniciar sesión en el tenancy donde se quiere
+      desplegar. Resource Manager descarga el ZIP y crea un <em>stack</em>.</p></li>
+    <li><h3>Se completa el formulario</h3><p>Compartment, llave SSH, IP de acceso y los parámetros
+      del laboratorio. Lo que no se toque queda con valores pensados para una demostración.</p></li>
+    <li><h3>Plan y luego Apply</h3><p>El plan muestra qué se va a crear antes de crearlo. Conviene
+      mirarlo: es la misma revisión que se le pide a cualquier cambio de infraestructura.</p></li>
+    <li><h3>Al terminar, Destroy</h3><p>Desde el mismo stack. Es el equivalente a los scripts de
+      borrado del repositorio.</p></li>
+  </ol>
+</section>
+
+<section>
+  <h2>Todos los stacks</h2>
+  <table><thead><tr><th>Módulo</th><th>Paquete</th><th>Desplegar</th></tr></thead>
+  <tbody><tr><td>Guardarraíles de costo</td><td><code>presupuesto-y-alertas.zip</code></td><td><a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/presupuesto-y-alertas.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></td></tr><tr><td>01 · Arquitectura elástica</td><td><code>01-elasticidad.zip</code></td><td><a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/01-elasticidad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></td></tr><tr><td>02 · Seguridad de extremo a extremo</td><td><code>02-seguridad.zip</code></td><td><a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/02-seguridad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></td></tr><tr><td>03 · Un agente que no puede hacer daño</td><td colspan='2'>Sin infraestructura</td></tr><tr><td>04 · Datos y analítica operacional</td><td><code>04-datos-analitica.zip</code></td><td><a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/04-datos-analitica.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></td></tr><tr><td>05 · Observabilidad y confiabilidad</td><td><code>05-observabilidad.zip</code></td><td><a class="desplegar" href="https://cloud.oracle.com/resourcemanager/stacks/create?zipUrl=https://github.com/jesmonsa/oci-workshop-labs/releases/latest/download/05-observabilidad.zip"><img src="https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg" alt="Deploy to Oracle Cloud"></a></td></tr></tbody></table>
+  <div class="nota"><strong>El de costo va primero</strong>, y no es una formalidad. Los créditos
+  de una cuenta de prueba son finitos y no vuelven. Es un despliegue de un minuto que avisa antes
+  de que el gasto ocurra — y de paso es el ejemplo de FinOps más barato que existe.</div>
+</section>
+
+<section>
+  <h2>Antes del primer despliegue</h2>
+  <h3>Límites de servicio</h3>
+  <p>Es lo que más despliegues rompe en cuentas nuevas. Si un límite está en cero, la solicitud de
+  aumento <strong>no es inmediata</strong>: puede tomar días. Conviene revisarlos con tiempo, en
+  <em>Governance &amp; Administration → Limits, Quotas and Usage</em>, para el shape de cómputo, el
+  balanceador flexible y la base de datos administrada.</p>
+
+  <h3>Nombres que cambian entre regiones</h3>
+  <p>Tres cosas no se llaman igual en todas partes, y una configuración que las nombra mal falla
+  de formas confusas:</p>
+  <table>
+    <thead><tr><th>Qué</th><th>Cómo verificarlo</th></tr></thead>
+    <tbody>
+      <tr><td>Shapes de cómputo y de base de datos</td>
+        <td><code>oci compute shape list</code> · <code>oci mysql shape list</code></td></tr>
+      <tr><td>Reglas de protección del WAF</td>
+        <td><code>oci waf protection-capability list --key 941100</code></td></tr>
+      <tr><td>Nombres de métrica</td>
+        <td><code>oci monitoring metric list --namespace oci_computeagent</code></td></tr>
+    </tbody>
+  </table>
+  <div class="aviso"><strong>El caso más traicionero:</strong> una alarma sobre una métrica que no
+  existe <em>se crea sin ningún error y nunca suena</em>. En la consola se ve perfecta. Por eso el
+  módulo 5 incluye un panel que distingue «tranquila» de «sin datos».</div>
+</section>
+
+<section>
+  <h2>Costo</h2>
+  <p>Los laboratorios crean recursos que se cobran. De mayor a menor:</p>
+  <table>
+    <thead><tr><th>Módulo</th><th>Qué pesa</th><th>Nota</th></tr></thead>
+    <tbody>
+      <tr><td>4 · Datos</td><td>Base de datos administrada, y más aún el acelerador</td>
+        <td>El acelerador viene <strong>apagado</strong> por defecto</td></tr>
+      <tr><td>1 · Elasticidad</td><td>Instancias y balanceador</td>
+        <td>Crece al escalar: es justamente lo que demuestra</td></tr>
+      <tr><td>2 · Seguridad</td><td>Instancias, balanceador y WAF</td>
+        <td>Bastion y Security Zones no tienen costo adicional</td></tr>
+      <tr><td>5 · Observabilidad</td><td>Prácticamente nada</td>
+        <td>Solo alarmas y notificaciones</td></tr>
+      <tr><td>3 · Agente</td><td>Nada de infraestructura</td>
+        <td>Solo el consumo del modelo, por tokens</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Destruir al terminar cada día no es opcional.</strong> Cada módulo trae su script; desde
+  Resource Manager, la acción <em>Destroy</em> del stack hace lo mismo.</p>
+</section>
+
+<section>
+  <h2>Ejecutarlo sin el botón</h2>
+  <p>Todo funciona igual con Terraform desde un equipo. La única diferencia está en la
+  autenticación: en Resource Manager la provee el servicio, y en local se usa el perfil de
+  <code>~/.oci/config</code>.</p>
+  <pre><code>git clone https://github.com/jesmonsa/oci-workshop-labs.git
+cd oci-workshop-labs/labs/01-elasticidad/terraform/elasticidad
+cp terraform.tfvars.example terraform.tfvars   # completar
+terraform init &amp;&amp; terraform apply</code></pre>
+  <p>Para generar los mismos paquetes que usa el botón, sin publicarlos:
+  <code>./scripts/empaquetar-stacks.sh</code> los deja en <code>dist/</code>, listos para subir a
+  mano en Resource Manager.</p>
+</section>
+
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

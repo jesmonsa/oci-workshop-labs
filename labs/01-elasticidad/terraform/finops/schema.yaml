@@ -1,0 +1,55 @@
+title: "Guardarraíles de costo · presupuesto y alertas"
+description: "Presupuesto mensual con avisos al 50, 75 y 90 %, más una alerta sobre el gasto proyectado. Se aplica ANTES de crear cualquier laboratorio."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Qué se vigila"
+    variables: ["compartment_ocid", "monto_presupuesto", "email_alertas"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["tenancy_ocid", "region", "config_file_profile"]
+
+variables:
+  tenancy_ocid:
+    type: string
+    title: "Tenancy"
+    required: true
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment a vigilar"
+    description: "Si se van a desplegar varios laboratorios, conviene apuntar al compartment padre para que un solo presupuesto los cubra todos."
+    required: true
+  monto_presupuesto:
+    type: number
+    title: "Presupuesto mensual (USD)"
+    description: "El crédito de una cuenta de prueba es finito y no vuelve. Este es el control más barato que existe."
+    default: 150
+    minimum: 10
+    maximum: 100000
+  email_alertas:
+    type: string
+    title: "Correo que recibe los avisos"
+    description: "Llega un correo de confirmación de la suscripción. Sin ese clic no llega ninguna alerta."
+    required: true
+    pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+
+outputGroups:
+  - title: "Resultado"
+    outputs: ["budget_id"]
+
+outputs:
+  budget_id:
+    type: string
+    title: "Presupuesto creado"
+    visible: true

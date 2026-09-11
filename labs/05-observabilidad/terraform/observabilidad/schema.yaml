@@ -1,0 +1,102 @@
+title: "Módulo 5 · Observabilidad"
+description: "Alarmas con destinatario y runbook enlazado, sobre el laboratorio del módulo 1. La alarma suena, el autoescalamiento reacciona, y la alarma se cierra sola: ese ciclo es el contenido del módulo."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Dónde viven las alarmas"
+    variables: ["compartment_ocid", "owner"]
+  - title: "Qué se vigila"
+    variables: ["compartment_laboratorio"]
+  - title: "A quién le llega"
+    variables: ["correos_destino"]
+  - title: "Umbrales"
+    variables: ["umbral_cpu", "duracion_pendiente"]
+  - title: "Runbooks"
+    variables: ["url_runbook_cpu", "url_runbook_backends"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["region", "config_file_profile"]
+
+variables:
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment de las alarmas"
+    required: true
+  compartment_laboratorio:
+    type: oci:identity:compartment:id
+    title: "Compartment que se vigila"
+    description: "Donde están los recursos del módulo 1. Puede ser distinto del anterior, y en la práctica conviene: la operación mira todo desde un solo lugar."
+    required: true
+  owner:
+    type: string
+    title: "Responsable"
+    default: "equipo-cloud"
+
+  correos_destino:
+    type: array
+    title: "Correos que reciben las alarmas"
+    description: "Cada uno debe confirmar la suscripción desde su correo. Sin ese clic la alarma dispara igual y la bandeja de entrada sigue vacía."
+    items:
+      type: string
+      pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+    required: true
+
+  umbral_cpu:
+    type: integer
+    title: "% de CPU para disparar la alarma"
+    description: "Debe quedar POR DEBAJO del umbral de autoescalamiento del módulo 1 (55 % por defecto), para que la alarma suene primero y el autoescalamiento la apague después."
+    default: 45
+    minimum: 10
+    maximum: 95
+  duracion_pendiente:
+    type: enum
+    title: "Cuánto debe sostenerse antes de sonar"
+    enum: ["PT1M", "PT2M", "PT3M", "PT5M", "PT10M"]
+    default: "PT3M"
+    description: "Sin esta espera, cualquier pico de treinta segundos genera un correo, y en dos semanas nadie los lee."
+
+  url_runbook_cpu:
+    type: string
+    title: "Runbook de saturación de CPU"
+    description: "Este enlace viaja DENTRO del correo de la alarma. Es lo que baja el tiempo de recuperación."
+    default: "https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/05-observabilidad/runbooks/RUNBOOK-saturacion-cpu.md"
+  url_runbook_backends:
+    type: string
+    title: "Runbook de servidores caídos"
+    default: "https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/05-observabilidad/runbooks/RUNBOOK-backends-caidos.md"
+
+outputGroups:
+  - title: "Resultado"
+    outputs: ["resumen", "suscripciones_pendientes"]
+  - title: "Identificadores"
+    outputs: ["topic_id", "alarma_cpu_id", "alarma_backends_id"]
+
+outputs:
+  resumen:
+    type: string
+    title: "Alarmas creadas"
+    visible: true
+  suscripciones_pendientes:
+    type: string
+    title: "Recordatorio"
+    visible: true
+  topic_id:
+    type: string
+    title: "Tema de notificaciones"
+  alarma_cpu_id:
+    type: string
+    title: "Alarma de CPU"
+  alarma_backends_id:
+    type: string
+    title: "Alarma de backends"

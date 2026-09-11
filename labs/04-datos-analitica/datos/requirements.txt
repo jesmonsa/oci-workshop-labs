@@ -1,0 +1,2 @@
+# Laboratorio de datos — módulo 4
+mysql-connector-python>=8.4.0

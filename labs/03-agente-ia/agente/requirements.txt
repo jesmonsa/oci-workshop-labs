@@ -1,0 +1,7 @@
+# Agente de operación cloud — módulo 3
+#
+# El SDK de OCI es la única dependencia: incluye tanto los clientes de infraestructura
+# (compute, red, object storage, balanceador, Cloud Guard, usage) como los de
+# Generative AI. No hace falta ningún framework de agentes: el agente completo son
+# tres piezas —planificador, validador y catálogo— y caben en un archivo.
+oci>=2.140.0

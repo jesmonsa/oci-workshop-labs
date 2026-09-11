@@ -1,0 +1,32 @@
+# Copiar a terraform.tfvars y completar. terraform.tfvars está en .gitignore.
+# Los OCIDs de abajo son ficticios: no intentar usarlos.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaEJEMPLO"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaaaEJEMPLO"
+region           = "us-ashburn-1"
+
+config_file_profile = ""
+owner               = "equipo-cloud"
+
+# Contenido de la llave pública, no la ruta:  cat ~/.ssh/id_rsa.pub
+ssh_public_key = "ssh-rsa AAAAB3Nza... jesus@equipo"
+
+# Tu IP pública:  curl -s ifconfig.me
+mi_ip_cidr = "190.0.0.0/32"
+
+# --- Ajustes de la demo ------------------------------------------------------
+# Estos valores son los que hacen que el escalamiento se vea en pantalla dentro
+# del tiempo del bloque. En una arquitectura real serían más conservadores.
+
+shape         = "VM.Standard.E4.Flex"
+ocpus         = 1
+memory_in_gbs = 8
+
+pool_min = 2
+pool_max = 6
+
+scale_out_threshold = 55
+scale_in_threshold  = 20
+scale_out_step      = 2
+scale_in_step       = 1
+cooldown_seconds    = 300

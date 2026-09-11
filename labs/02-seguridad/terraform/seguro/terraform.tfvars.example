@@ -1,0 +1,22 @@
+# Copiar a terraform.tfvars y completar. terraform.tfvars está en .gitignore.
+# Los OCIDs de abajo son ficticios.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaaEJEMPLO"
+compartment_ocid = "ocid1.compartment.oc1..aaaaaaaaEJEMPLO" # lab-02-seguridad
+region           = "us-ashburn-1"
+
+config_file_profile = ""
+owner               = "equipo-cloud"
+
+ssh_public_key = "ssh-rsa AAAAB3Nza... jesus@equipo"
+
+# Tu IP pública:  curl -s ifconfig.me
+# El LUNES en la sala será otra: actualizar a las 13:45 y hacer `terraform apply`.
+ips_admin_cidr = ["190.0.0.0/32"]
+
+email_alertas = "tu.correo@oracle.com"
+
+# WAF — verificar las llaves antes del primer apply (ver variables.tf)
+waf_capacidades       = ["941100", "942100"]
+waf_version_capacidad = 1
+waf_bloquear_admin    = true
