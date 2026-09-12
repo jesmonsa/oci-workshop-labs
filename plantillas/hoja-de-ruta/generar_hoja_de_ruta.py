@@ -99,7 +99,9 @@ COLUMNAS_RUTA = [
 ]
 
 # Columnas de la hoja de ruta que convierten una línea en un compromiso.
-# Si falta cualquiera de ellas, la clasificación dice «No ejecutable».
+# Si falta cualquiera de ellas, la clasificación dice «No ejecutable». Y «falta»
+# incluye escribir `[VALIDAR]`: esa marca significa «sin verificar», así que una
+# línea base en [VALIDAR] es una línea sin línea base, no una línea completa.
 OBLIGATORIAS = {"E": "dueño", "K": "fecha", "H": "métrica", "J": "valor objetivo"}
 
 FUENTE, AZUL, GRIS = "Arial", "1F3864", "595959"
@@ -315,12 +317,20 @@ def construir_xlsx(ruta):
 
         # Clasificación. El orden de las preguntas es el criterio del taller:
         # primero se pregunta si es ejecutable, y solo después qué tan buena es.
+        # `[VALIDAR]` es la marca del proyecto para «esto todavía no está
+        # verificado», así que en un campo obligatorio cuenta como vacío. Sin esta
+        # comprobación, una línea con la métrica o el valor objetivo en [VALIDAR]
+        # salía «Ejecutable», que es exactamente lo contrario de lo que significa.
+        def pendiente(col):
+            return f'OR(${col}{r}="",ISNUMBER(SEARCH("[VALIDAR]",${col}{r})))'
+
         c = wr.cell(row=r, column=13, value=(
             f'=IF($B{r}="","",'
             f'IF($L{r}="Descartado","Descartada",'
-            f'IF(OR($E{r}="",$K{r}="",$H{r}="",$J{r}=""),"No ejecutable",'
+            f'IF(OR({pendiente("E")},{pendiente("K")},{pendiente("H")},{pendiente("J")}),'
+            f'"No ejecutable",'
             f'IF($L{r}="En riesgo","En riesgo",'
-            f'IF($I{r}="","Sin línea base",'
+            f'IF({pendiente("I")},"Sin línea base",'
             f'IF($L{r}<>"Acordado","Por confirmar","Ejecutable"))))))'))
         c.font = f(True)
         c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)

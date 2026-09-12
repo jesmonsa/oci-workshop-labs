@@ -1,6 +1,6 @@
 # Módulo 05 · Observabilidad y confiabilidad
 
-La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dentro, y el autoescalamiento la apaga sola.
+La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dentro, y enseña por qué más capacidad no la apaga.
 
 **Salida del ejercicio:** Matriz señal → umbral → responsable → acción ·
 **[Página del módulo](https://jesmonsa.github.io/oci-workshop-labs/modulos/05-observabilidad.html)**
@@ -10,7 +10,7 @@ La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dent
 ## Qué demuestra
 
 - **El correo trae el runbook enlazado.** Quien lo recibe de madrugada no busca en ningún wiki. Eso es lo que baja el tiempo de recuperación: no el tablero, no la herramienta.
-- **La alarma se cierra sola**, porque el autoescalamiento reaccionó. ¿Debía despertar a alguien? No. ¿Debía desaparecer sin rastro? Tampoco. Distinguir lo que se atiende ahora de lo que hay que saber es lo que separa a un equipo que apaga incendios de uno que opera.
+- **Que el grupo crezca hasta su tope y la alarma siga sonando.** Medido: con la carga puesta 35 minutos, el pool llegó a 6 instancias y la alarma nunca se cerró. Más capacidad no baja la utilización, *sube el rendimiento* — la alarma de saturación se apaga cuando baja la demanda, no cuando llega capacidad. De ahí sale la señal que sí importa: no «la CPU está alta», sino «me quedé sin margen».
 - El estado «sin datos»: una alarma ciega se ve exactamente igual que una tranquila. Es el estado más peligroso de un modelo de observabilidad.
 - Una alarma que despierta a alguien sin acción escrita es **ruido**, y el ruido es lo que hace que en seis meses nadie mire las que sí importan.
 
@@ -18,11 +18,15 @@ La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dent
 
 ```
   carga ──► CPU sube ──► alarma DISPARA ──► correo con el runbook dentro
-                                 │
+                                 │                    (195 s, medido)
                    el autoescalamiento agrega instancias
                                  │
-          CPU por instancia baja ──► la alarma SE CIERRA SOLA
-                                      (queda registrada, no despierta a nadie)
+                    el pool llega a su TOPE (2 → 6)
+                                 │
+          la alarma SIGUE SONANDO ──► la capacidad no bajó la utilización:
+                                      subió el rendimiento
+                                 │
+              baja la demanda ──► la alarma se cierra (115 s, medido)
 ```
 
 ## Paso a paso
@@ -31,7 +35,7 @@ La métrica del módulo 1 convertida en alarma. Suena, avisa con el runbook dent
 2. **Desplegar** — Menos de un minuto: son tres recursos.
 3. **Confirmar la suscripción de correo** — Hasta ese clic, la alarma dispara igual y la bandeja de entrada sigue vacía. Es el fallo más común y el más frustrante.
 4. **Comprobar que las alarmas ven datos** — El panel distingue tres estados. El tercero, «sin datos», no es calma: es ceguera.
-5. **Medir el ciclo completo** — El script arranca la carga, cronometra cuánto tarda en disparar y cuánto en cerrarse sola, y lo anota. Sin ese número no se puede cronometrar una demostración.
+5. **Medir el ciclo completo** — Cuánto tarda en disparar, si el grupo alcanza su tope y cuánto tarda en cerrarse al bajar la carga. Sin esos números no se puede cronometrar una demostración, ni saber qué prometer.
 6. **Capturar el correo** — Con el enlace al runbook visible. Es la imagen del módulo.
 
 El detalle completo, con todos los comandos y la tabla de diagnóstico de fallos, está en
@@ -51,7 +55,7 @@ Un laboratorio que no dice en qué se apartó de una arquitectura real enseña m
 | Simplificación | Por qué |
 |---|---|
 | Solo dos alarmas | Una de causa (saturación) y una de síntoma (servidores caídos). Con esas dos alcanza para mostrar que la severidad la define el impacto, no la magnitud de la métrica. |
-| El umbral es más bajo que el del autoescalamiento | A propósito: así la alarma suena primero y el autoescalamiento la apaga después. Ese orden es lo que hace entendible la conversación sobre alarmas que se resuelven solas. |
+| El umbral es más bajo que el del autoescalamiento | A propósito: así la alarma suena antes de que el grupo empiece a crecer y se ve la secuencia completa. Lo que NO ocurre —y el laboratorio lo demuestra— es que el escalamiento la apague. |
 | Falta lo que un modelo completo necesita | Registros centralizados, trazas distribuidas, prueba sintética desde fuera y revisión periódica. Lo que se muestra es el mínimo viable — y el mínimo viable es justo lo que se puede tener en dos semanas. |
 
 ## Cómo se relaciona con los demás
