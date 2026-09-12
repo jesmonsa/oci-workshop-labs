@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de consola — Seguridad cloud de extremo a extremo</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../manuales.html" class="activo">Manuales</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+<link rel="stylesheet" href="../manuales.css">
+<header class="principal"><div class="envoltura">
+<span class="etiqueta">Manual de consola</span>
+<h1>Manual de consola — Seguridad cloud de extremo a extremo</h1>
+<p class="entradilla">Red privada en tres capas, NSG por función, WAF sobre el balanceador, bastión, flow logs, Cloud Guard y Security Zone, construidos a mano</p>
+<div class="ficha" style="margin-top:22px"><div><b>Módulo</b>02</div><div><b>Duración</b>3 h la primera pasada por consola</div><div><b>Costo</b>unidades de USD; el ensayo midió 0,13 USD de cómputo y el presupuesto proyectó 2,10 USD</div></div>
+<a class="descarga" href="../pdf/Manual-Consola-02-Seguridad.pdf">Descargar en PDF</a>
+</div></header>
+<main><div class="envoltura">
+<div class="indice"><p>Contenido</p><ol><li><a href="#1-qu-se-construye-y-para-qu">1. Qué se construye y para qué</a></li><li><a href="#2-equivalencias-con-otras-nubes">2. Equivalencias con otras nubes</a></li><li><a href="#3-prerrequisitos">3. Prerrequisitos</a></li><li><a href="#4-compartimentos-del-laboratorio">4. Compartimentos del laboratorio</a></li><li><a href="#5-cloud-guard">5. Cloud Guard</a></li><li><a href="#6-el-laboratorio-a-el-construido-a-la-ligera">6. El laboratorio A — el construido a la ligera</a></li><li><a href="#7-el-laboratorio-b-vcn-y-gateways">7. El laboratorio B — VCN y gateways</a></li><li><a href="#8-tablas-de-ruteo">8. Tablas de ruteo</a></li><li><a href="#9-subredes-y-la-security-list-por-defecto">9. Subredes y la security list por defecto</a></li><li><a href="#10-network-security-groups">10. Network Security Groups</a></li><li><a href="#11-instancias-de-aplicaci-n-sin-ip-p-blica">11. Instancias de aplicación, sin IP pública</a></li><li><a href="#12-balanceador-de-carga">12. Balanceador de carga</a></li><li><a href="#13-waf-sobre-el-balanceador">13. WAF sobre el balanceador</a></li><li><a href="#14-basti-n">14. Bastión</a></li><li><a href="#15-flow-logs">15. Flow logs</a></li><li><a href="#16-alertas-ante-cambios-cr-ticos">16. Alertas ante cambios críticos</a></li><li><a href="#17-security-zone">17. Security Zone</a></li><li><a href="#18-validaci-n-de-extremo-a-extremo">18. Validación de extremo a extremo</a></li><li><a href="#19-qu-puede-salir-mal">19. Qué puede salir mal</a></li><li><a href="#20-limpieza">20. Limpieza</a></li><li><a href="#21-documentaci-n-oficial">21. Documentación oficial</a></li></ol></div>
+<p>Este manual construye desde la consola, haciendo clic, lo mismo que el módulo de Terraform de este laboratorio crea en un <code>apply</code>. No hace falta Terraform ni la CLI de OCI para seguirlo: la CLI aparece solo en los bloques de verificación, donde una línea confirma en un segundo lo que en la consola tomaría tres pantallas. El laboratorio se despliega en un tenancy de prueba, desechable; no se toca ningún ambiente con datos reales.</p>
+<hr/>
+<h2 id="1-qu-se-construye-y-para-qu">1. Qué se construye y para qué</h2>
+<p>Se construyen <b>dos laboratorios</b> y se auditan con <b>el mismo script</b>.</p>
+<p>El primero está hecho a la ligera: una sola subred pública, servidores de aplicación con IP pública, la security list por defecto tal como OCI la entrega, un balanceador sin filtro de aplicación y ningún registro de tráfico. No es una caricatura: es cómo queda un ambiente que se levantó para salir del paso y nadie volvió a mirar.</p>
+<p>El segundo está hecho bien: tres capas de red, nada con IP pública salvo el balanceador, reglas de tráfico por función, un firewall de aplicación en el borde, acceso administrativo por bastión con sesiones que expiran, registro de flujos de red, alertas ante cambios críticos y detección continua de postura.</p>
+<p>La decisión que el laboratorio ayuda a tomar no es si se compra seguridad, sino <b>cuál es el mínimo de controles que un ambiente debe cumplir antes de recibir tráfico real, y quién responde por cada uno</b>. La auditoría pone números sobre la mesa para que esa conversación no sea de opiniones.</p>
+<h3 id="el-contraste-medido">El contraste, medido</h3>
+<pre><code>   A · construido a la ligera             B · construido bien
+   ------------------------------------   ------------------------------
+   una subred, publica                    tres subredes, una publica
+   dos instancias con IP publica          instancias sin IP publica
+   SL por defecto: 22 desde 0.0.0.0/0     SL por defecto endurecida
+   balanceador sin WAF                    balanceador con WAF
+   sin flow logs                          flow logs en la subred de app
+   acceso SSH directo desde internet      bastion con TTL y lista de CIDR
+   ------------------------------------   ------------------------------
+   5 hallazgos altos                      0 hallazgos altos
+   3 medios · 2 controles que cumplen     2 medios · 6 que cumplen</code></pre>
+<p>Los cinco hallazgos altos del laboratorio A son: balanceador público sin WAF, dos instancias con IP pública y dos security lists que abren el puerto 22 a <code>0.0.0.0/0</code> —una de ellas, la que OCI crea sola con cada VCN—. Cloud Guard aparece como sexto hallazgo alto cuando está apagado; en la corrida medida ya estaba encendido.</p>
+<h3 id="arquitectura-del-laboratorio-b">Arquitectura del laboratorio B</h3>
+<pre><code>                          Internet
+                             | 80 / 443
+        +--------------------v--------------------+
+        |  Load Balancer publico  +  WAF          |  subred publica
+        |  NSG-lb: entra 80 y 443 desde internet  |  10.40.1.0/24
+        +--------------------+--------------------+
+                             | 80  (solo desde NSG-lb)
+        +--------------------v--------------------+
+        |  app-1      app-2      sin IP publica   |  subred privada app
+        |  NSG-app: 80 desde NSG-lb               |  10.40.2.0/24
+        |           22 desde el endpoint bastion  |  salida: NAT + SGW
+        +---+-----------------------------+-------+
+            | 3306 (solo desde NSG-app)   | 22
+        +---v---------------+    +---------+---------+
+        |  subred privada   |    |  OCI Bastion      |
+        |  datos            |    |  sesion con TTL   |
+        |  10.40.3.0/24     |    |  lista de CIDR    |
+        |  sin ruta a       |    +-------------------+
+        |  internet         |
+        +-------------------+
+
+   Flow logs en la subred de app · Events + Notifications ante cambios de
+   red e IAM · Cloud Guard sobre el tenancy · Security Zone en su propio
+   compartimento</code></pre>
+<p>La capa de datos se construye aunque este laboratorio no despliegue ninguna base de datos: así el diagrama de tres capas se puede mostrar completo en la consola, y la regla «el puerto de la base solo se alcanza desde la aplicación» existe como objeto y no como intención.</p>
+<hr/>
+<h2 id="2-equivalencias-con-otras-nubes">2. Equivalencias con otras nubes</h2>
+<p>Solo los servicios que aparecen en este manual.</p>
+<div class="tablacaja"><table><thead><tr><th>Concepto</th><th>AWS</th><th>Azure</th><th>OCI</th></tr></thead><tbody><tr><td>Frontera de facturación y permisos</td><td>Cuenta / OU</td><td>Suscripción / Grupo de recursos</td><td><b>Compartimento</b></td></tr><tr><td>Red virtual</td><td>VPC</td><td>Virtual Network</td><td><b>VCN</b></td></tr><tr><td>Subred privada</td><td>Subnet privada</td><td>Subnet sin IP pública</td><td><b>Subred con IP pública prohibida</b></td></tr><tr><td>Salida a internet sin entrada</td><td>NAT Gateway</td><td>NAT Gateway</td><td><b>NAT Gateway</b></td></tr><tr><td>Acceso privado a servicios del proveedor</td><td>VPC Endpoint / PrivateLink</td><td>Private Endpoint / Service Endpoint</td><td><b>Service Gateway</b></td></tr><tr><td>Filtro a nivel de subred</td><td>Network ACL</td><td>(no hay equivalente directo)</td><td><b>Security list</b></td></tr><tr><td>Filtro a nivel de interfaz</td><td>Security Group</td><td>Network Security Group</td><td><b>Network Security Group (NSG)</b></td></tr><tr><td>Balanceador de capa 7</td><td>Application Load Balancer</td><td>Application Gateway</td><td><b>Load Balancer (flexible)</b></td></tr><tr><td>Firewall de aplicación</td><td>AWS WAF</td><td>Azure WAF (sobre App Gateway o Front Door)</td><td><b>OCI WAF</b></td></tr><tr><td>Acceso administrativo sin exponer SSH</td><td>Systems Manager Session Manager / EC2 Instance Connect Endpoint</td><td>Azure Bastion</td><td><b>OCI Bastion</b></td></tr><tr><td>Registro de flujos de red</td><td>VPC Flow Logs</td><td>NSG Flow Logs</td><td><b>Flow logs (servicio Logging)</b></td></tr><tr><td>Registro de llamadas al plano de control</td><td>CloudTrail</td><td>Activity Log</td><td><b>Audit</b></td></tr><tr><td>Postura de seguridad continua</td><td>Security Hub / GuardDuty</td><td>Microsoft Defender for Cloud</td><td><b>Cloud Guard</b></td></tr><tr><td>Barrera que impide crear lo que viola la política</td><td>SCP (parcial) / Config Rules con remediación</td><td>Azure Policy en modo Deny</td><td><b>Security Zone</b></td></tr><tr><td>Eventos del plano de control → acción</td><td>EventBridge</td><td>Event Grid</td><td><b>Events Service</b></td></tr><tr><td>Notificación por correo</td><td>SNS</td><td>Action Group</td><td><b>Notifications</b></td></tr></tbody></table></div>
+<p>Dos diferencias que sorprenden a quien llega de AWS o Azure:</p>
+<ul><li><b>Un NSG se referencia a otro como origen o destino.</b> Una regla puede decir literalmente "acepto el puerto 80 cuando el origen es el NSG del balanceador", sin escribir CIDR ni mantener listas de IP. Es la razón por la que aquí las security lists quedan casi vacías.</li><li><b>Los compartimentos no son grupos de recursos.</b> Son la unidad sobre la que se escriben las políticas de IAM, se mide el costo y se aplican las Security Zones.</li></ul>
+<hr/>
+<h2 id="3-prerrequisitos">3. Prerrequisitos</h2>
+<h3 id="3-1-permisos">3.1 Permisos</h3>
+<p>Quien siga este manual necesita, sobre el compartimento del laboratorio, permisos para crear red, cómputo, balanceadores, WAF, bastión y logs; y sobre el <b>tenancy</b>, permiso para habilitar Cloud Guard y para crear la Security Zone y su receta. Si es administrador del tenancy de prueba, ya los tiene.</p>
+<p>Si prefiere un usuario acotado, el conjunto mínimo se ve así:</p>
+<pre><code>Allow group LabSeguridad to manage virtual-network-family in compartment lab
+Allow group LabSeguridad to manage instance-family in compartment lab
+Allow group LabSeguridad to manage load-balancers in compartment lab
+Allow group LabSeguridad to manage waf-family in compartment lab
+Allow group LabSeguridad to manage bastion-family in compartment lab
+Allow group LabSeguridad to manage logging-family in compartment lab
+Allow group LabSeguridad to manage ons-family in compartment lab
+Allow group LabSeguridad to manage cloudevents-rules in compartment lab
+Allow group LabSeguridad to manage cloud-guard-family in tenancy
+Allow group LabSeguridad to manage security-zone in tenancy</code></pre>
+<p>Las familias de recursos exactas cambian entre versiones del servicio; si la consola rechaza una operación, el mensaje nombra el verbo y el tipo que faltan <code>[VALIDAR]</code>.</p>
+<h3 id="3-2-qu-debe-existir-antes-de-empezar">3.2 Qué debe existir antes de empezar</h3>
+<div class="tablacaja"><table><thead><tr><th>Elemento</th><th>Cómo obtenerlo</th></tr></thead><tbody><tr><td>Tenancy de prueba, vacío</td><td>Cuenta de prueba propia. No se usa un tenancy con datos</td></tr><tr><td>Región home definida</td><td>La región de reporte de Cloud Guard <b>no se puede cambiar después</b></td></tr><tr><td>Un par de llaves SSH</td><td><code>ssh-keygen -t rsa -b 4096</code>. Solo se usa a través del bastión</td></tr><tr><td>Un buzón de correo para alertas</td><td>Cualquiera al que tenga acceso. Hay que confirmar la suscripción</td></tr><tr><td>Compartimentos del laboratorio</td><td>Se crean en el capítulo 4</td></tr></tbody></table></div>
+<h3 id="3-3-l-mites-de-una-cuenta-de-prueba">3.3 Límites de una cuenta de prueba</h3>
+<p>Antes de empezar conviene mirar los límites, porque el error de límite aparece a la mitad de la construcción y obliga a devolverse.</p>
+<p class="consola"><span>Consola de OCI</span>Governance &amp; Administration › Limits, Quotas and Usage</p>
+<div class="tablacaja"><table><thead><tr><th>Recurso</th><th>Cuánto usa este laboratorio</th></tr></thead><tbody><tr><td>Instancias <code>VM.Standard.E4.Flex</code></td><td>2 (1 OCPU · 8 GB cada una)</td></tr><tr><td>Load balancers flexibles</td><td>1 (más 1 si también levanta el laboratorio A)</td></tr><tr><td>VCN</td><td>1 (más 1 para el laboratorio A)</td></tr><tr><td>Bastiones</td><td>1</td></tr><tr><td>Políticas de WAF</td><td>1</td></tr></tbody></table></div>
+<p>Si el límite de balanceadores es 1, construya un laboratorio a la vez y audite cada uno por separado. El contraste se pierde en simultaneidad, no en contenido: las dos salidas del script quedan guardadas y se comparan después.</p>
+<h3 id="3-4-valores-usados-en-todo-el-manual">3.4 Valores usados en todo el manual</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Prefijo de nombres</td><td><code>lab02-</code></td></tr><tr><td>CIDR de la VCN</td><td><code>10.40.0.0/16</code></td></tr><tr><td>Subred pública (balanceador)</td><td><code>10.40.1.0/24</code></td></tr><tr><td>Subred privada de aplicación</td><td><code>10.40.2.0/24</code></td></tr><tr><td>Subred privada de datos</td><td><code>10.40.3.0/24</code></td></tr><tr><td>Imagen</td><td>Oracle Linux 9, la más reciente</td></tr><tr><td>Shape</td><td>VM.Standard.E4.Flex · 1 OCPU · 8 GB</td></tr></tbody></table></div>
+<p>Los OCID que aparecen en los ejemplos son ficticios y se ven como <code>ocid1.compartment.oc1..aaaaEJEMPLO</code>.</p>
+<hr/>
+<h2 id="4-compartimentos-del-laboratorio">4. Compartimentos del laboratorio</h2>
+<p>Todo cuelga de un compartimento padre para que el presupuesto, el filtro de costos y el borrado final cubran los dos laboratorios de una vez.</p>
+<pre><code>   lab                      &lt;- el presupuesto apunta aqui
+   |- lab-01-elasticidad          &lt;- laboratorio A, el construido a la ligera
+   |- lab-02-seguridad          &lt;- laboratorio B, el construido bien
+   `- lab-02-zona-segura     &lt;- vacio; se le asocia la Security Zone</code></pre>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Compartments › Create Compartment</p>
+<ol><li>Cree el padre.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab</code></td></tr><tr><td>Description</td><td>Laboratorios de seguridad</td></tr><tr><td>Parent Compartment</td><td>el tenancy raíz</td></tr></tbody></table></div>
+<ol><li>En <b>Tags</b>, agregue dos etiquetas libres. Sirven para filtrar el costo después y para reconocer lo desechable de un vistazo.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Tag Key</td><td><code>Proyecto</code></td></tr><tr><td>Value</td><td><code>Laboratorio</code></td></tr><tr><td>Tag Key</td><td><code>Efimero</code></td></tr><tr><td>Value</td><td><code>si</code></td></tr></tbody></table></div>
+<ol><li>Repita <b>Create Compartment</b> tres veces más, con <code>lab</code> como <i>Parent Compartment</i>, para crear <code>lab-01-elasticidad</code>, <code>lab-02-seguridad</code> y <code>lab-02-zona-segura</code>.</li><li>Anote los cuatro OCID. Los va a necesitar en la auditoría y en la Security Zone.</li></ol>
+<p>Un compartimento recién creado tarda un par de minutos en propagarse. Si aparece en la lista pero un formulario no lo ofrece todavía, recargue la página y espere dos minutos antes de concluir que algo falló.</p>
+<hr/>
+<h2 id="5-cloud-guard">5. Cloud Guard</h2>
+<p>Cloud Guard va <b>primero</b>, antes de construir nada. No porque la construcción lo necesite, sino porque evalúa los recursos cuando cambian y en barridos periódicos: si se habilita al final, la consola sale vacía justo cuando se quiere mostrar algo. Habilitado antes, cuando el laboratorio A lleve unas horas arriba ya habrá problemas detectados sobre él.</p>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Cloud Guard</p>
+<ol><li>Abra Cloud Guard. Si el servicio nunca se ha habilitado en este tenancy, la consola presenta directamente el asistente de habilitación.</li><li>Complete el asistente.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Reporting region</td><td>La región home del tenancy</td></tr><tr><td>Compartments to monitor</td><td>El tenancy raíz</td></tr><tr><td>Configuration detector recipe</td><td>La receta administrada por Oracle para configuración</td></tr><tr><td>Activity detector recipe</td><td>La receta administrada por Oracle para actividad</td></tr></tbody></table></div>
+<ol><li>El asistente muestra que va a crear las <b>políticas de servicio</b> que Cloud Guard necesita para leer los recursos del tenancy. Acéptelas. Sin ellas el servicio queda habilitado pero ciego.</li><li>Confirme y espere. La habilitación tarda poco; el primer barrido completo, más.</li></ol>
+<div class="caja c-importante"><p class="cajatit">IMPORTANTE · Cloud Guard no se puede habilitar sin crear antes las políticas de servicio</p><p>Por consola esto es invisible: el asistente redacta las sentencias, las muestra y las crea al aceptar. Es el camino fácil y es el que documenta este manual.</p><p>Por CLI no hay asistente. <code>oci cloud-guard configuration update</code> falla si las políticas de servicio no existen todavía, y el mensaje de error no dice que falten políticas: dice que la operación no está autorizada. En el ensayo de este laboratorio hicieron falta <b>17 sentencias de política</b> creadas a mano antes de que la habilitación por CLI funcionara. Todas tienen la forma <code>Allow service cloudguard to &lt;verbo&gt; &lt;tipo de recurso&gt; in tenancy</code>, y el conjunto exacto depende de las recetas de detección que se activen: la lista autoritativa es la que el propio asistente de la consola muestra en el momento de aceptar <code>[VALIDAR la lista contra la consola de su región]</code>.</p><p>Consecuencia práctica: <b>habilite Cloud Guard por consola una vez, y automatice todo lo demás.</b> No vale la pena scriptear la única operación del laboratorio que la consola resuelve sola.</p></div>
+<p>Verificación:</p>
+<pre><code>oci cloud-guard configuration get --compartment-id "&lt;ocid-tenancy&gt;" \
+  --query 'data.status'
+# -&gt; "ENABLED"</code></pre>
+<h3 id="5-1-d-nde-se-ven-los-hallazgos">5.1 Dónde se ven los hallazgos</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Cloud Guard › Problems</p>
+<p>Deje pasar el tiempo. Cuando el laboratorio A esté arriba, esta pantalla debería mostrar problemas sobre sus recursos: instancias con IP pública, puerto de administración abierto, balanceador expuesto. Filtre por compartimento para separar el ruido del resto del tenancy. Cloud Guard <b>detecta</b>; no impide, y esa distinción es la que hace falta para entender el capítulo 17.</p>
+<hr/>
+<h2 id="6-el-laboratorio-a-el-construido-a-la-ligera">6. El laboratorio A — el construido a la ligera</h2>
+<p>Este laboratorio existe para ser auditado. Se construye rápido, a propósito, con las decisiones que se toman cuando el objetivo es que funcione hoy. Si ya tiene desplegado el laboratorio de elasticidad del módulo anterior, <b>úselo y salte este capítulo</b>: es exactamente este ambiente. Si no, lo que sigue reproduce lo mínimo para que la auditoría tenga qué encontrar.</p>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › Create VCN</p>
+<ol><li>Cree la VCN.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab01-vcn</code></td></tr><tr><td>Compartment</td><td><code>lab-01-elasticidad</code></td></tr><tr><td>IPv4 CIDR Blocks</td><td><code>10.30.0.0/16</code></td></tr><tr><td>DNS Resolution</td><td>activado</td></tr></tbody></table></div>
+<ol><li>Dentro de la VCN, cree un Internet Gateway con <b>Create Internet Gateway</b>, nombre <code>lab01-igw</code>.</li><li>En <b>Route Tables</b>, edite la tabla por defecto y agregue una regla:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Target Type</td><td>Internet Gateway</td></tr><tr><td>Destination CIDR Block</td><td><code>0.0.0.0/0</code></td></tr><tr><td>Target</td><td><code>lab01-igw</code></td></tr></tbody></table></div>
+<ol><li>En <b>Security Lists</b>, entre a la lista por defecto y <b>no la toque</b>. Esa es la gracia: OCI la crea con el puerto 22 abierto a <code>0.0.0.0/0</code>, y así se queda.</li><li>Cree una segunda security list, <code>lab01-sl-app</code>, con dos reglas de entrada:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Source CIDR</td><td><code>0.0.0.0/0</code> · Protocol TCP · Destination Port <code>80</code></td></tr><tr><td>Source CIDR</td><td><code>0.0.0.0/0</code> · Protocol TCP · Destination Port <code>22</code></td></tr></tbody></table></div>
+<ol><li>Cree la subred con <b>Create Subnet</b>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab01-subnet-public</code></td></tr><tr><td>CIDR Block</td><td><code>10.30.1.0/24</code></td></tr><tr><td>Subnet Access</td><td>Public Subnet</td></tr><tr><td>Security Lists</td><td><code>lab01-sl-app</code></td></tr></tbody></table></div>
+<ol><li>Cree dos instancias en esa subred, con IP pública asignada, imagen Oracle Linux 9 y shape <code>VM.Standard.E4.Flex</code> de 1 OCPU. El detalle está en el capítulo 11; aquí la única diferencia es que <b>sí</b> se asigna IP pública.</li><li>Cree un balanceador público en esa misma subred, con un listener HTTP en el 80 y las dos instancias como backends (capítulo 12). <b>No le ponga WAF.</b></li></ol>
+<p>Con eso el laboratorio A está listo para producir cinco hallazgos altos.</p>
+<p>Este laboratorio <b>no se queda encendido</b>. Tiene dos servidores con IP pública y el puerto 22 abierto a internet. En un tenancy de prueba, desechable y vigilado, durante unas horas, es un ejercicio; encendido una semana es un incidente esperando ocurrir, porque los escáneres encuentran un 22 abierto en minutos, no en días. Bórrelo el mismo día (capítulo 20).</p>
+<hr/>
+<h2 id="7-el-laboratorio-b-vcn-y-gateways">7. El laboratorio B — VCN y gateways</h2>
+<p>A partir de aquí se construye el laboratorio bien hecho, en el compartimento <code>lab-02-seguridad</code>.</p>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › Create VCN</p>
+<ol><li>Cree la VCN.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-vcn</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>IPv4 CIDR Blocks</td><td><code>10.40.0.0/16</code></td></tr><tr><td>DNS Resolution</td><td>activado</td></tr><tr><td>DNS Label</td><td><code>lab02</code></td></tr></tbody></table></div>
+<p>Use <b>Create VCN</b>, no el asistente de VCN con subredes. El asistente crea una topología que después hay que deshacer.</p>
+<ol><li>Entre a la VCN. En <b>Internet Gateways</b> › <b>Create Internet Gateway</b>:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-igw</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr></tbody></table></div>
+<ol><li>En <b>NAT Gateways</b> › <b>Create NAT Gateway</b>:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-nat</code></td></tr><tr><td>Block Traffic</td><td>desactivado</td></tr></tbody></table></div>
+<ol><li>En <b>Service Gateways</b> › <b>Create Service Gateway</b>:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-sgw</code></td></tr><tr><td>Services</td><td>la entrada que cubre <b>todos</b> los servicios de la región en la red de servicios de Oracle</td></tr></tbody></table></div>
+<p>La opción de servicios ofrece dos alternativas: una solo para Object Storage y otra para todos los servicios de la red de servicios de Oracle. Elija la segunda. El agente de cómputo y el plugin de bastión hablan con el plano de control de OCI a través de ella; con la opción restringida a Object Storage, el bastión no funciona y el síntoma no apunta a la causa.</p>
+<h3 id="7-1-por-qu-tres-gateways-y-no-uno">7.1 Por qué tres gateways y no uno</h3>
+<div class="tablacaja"><table><thead><tr><th>Gateway</th><th>Quién lo usa</th><th>Qué permite</th></tr></thead><tbody><tr><td>Internet Gateway</td><td>Solo la subred pública</td><td>Tráfico entrante y saliente desde internet</td></tr><tr><td>NAT Gateway</td><td>Solo la subred de aplicación</td><td>Salida a internet <b>sin</b> entrada posible</td></tr><tr><td>Service Gateway</td><td>Aplicación y datos</td><td>Llegar a servicios de OCI sin pasar por internet</td></tr></tbody></table></div>
+<p>La capa de datos solo tiene Service Gateway: una base de datos no necesita navegar. Lo primero que intenta un servidor comprometido es salir, y controlar la salida es lo que limita el daño.</p>
+<hr/>
+<h2 id="8-tablas-de-ruteo">8. Tablas de ruteo</h2>
+<p>Cada capa tiene su propia tabla. Es el mecanismo que hace que "la capa de datos no sale a internet" sea un hecho de la plataforma y no una nota en un documento.</p>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Route Tables › Create Route Table</p>
+<ol><li>Cree la tabla de la capa pública.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-rt-publica</code></td></tr><tr><td>Target Type</td><td>Internet Gateway</td></tr><tr><td>Destination CIDR Block</td><td><code>0.0.0.0/0</code></td></tr><tr><td>Target</td><td><code>lab02-igw</code></td></tr></tbody></table></div>
+<ol><li>Cree la tabla de la capa de aplicación, con <b>dos</b> reglas. Use <i>+ Another Route Rule</i> para agregar la segunda.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-rt-app</code></td></tr><tr><td>Regla 1 · Target Type</td><td>NAT Gateway</td></tr><tr><td>Regla 1 · Destination CIDR Block</td><td><code>0.0.0.0/0</code></td></tr><tr><td>Regla 1 · Target</td><td><code>lab02-nat</code></td></tr><tr><td>Regla 2 · Target Type</td><td>Service Gateway</td></tr><tr><td>Regla 2 · Destination</td><td>el bloque de servicios de la región (se elige de una lista, no se escribe)</td></tr><tr><td>Regla 2 · Target</td><td><code>lab02-sgw</code></td></tr></tbody></table></div>
+<ol><li>Cree la tabla de la capa de datos, con <b>una sola</b> regla.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-rt-datos</code></td></tr><tr><td>Target Type</td><td>Service Gateway</td></tr><tr><td>Destination</td><td>el bloque de servicios de la región</td></tr><tr><td>Target</td><td><code>lab02-sgw</code></td></tr></tbody></table></div>
+<p>Fíjese en lo que <b>no</b> tiene la tabla de datos: ninguna regla hacia <code>0.0.0.0/0</code>. No hay ruta. No es que el tráfico se filtre y se descarte; es que no hay camino.</p>
+<hr/>
+<h2 id="9-subredes-y-la-security-list-por-defecto">9. Subredes y la security list por defecto</h2>
+<h3 id="9-1-endurecer-la-security-list-por-defecto-primero">9.1 Endurecer la security list por defecto — primero</h3>
+<p>Esto va antes de crear las subredes, porque una subred creada sin especificar security list <b>hereda la por defecto</b>, y la por defecto que OCI entrega trae el puerto 22 abierto a <code>0.0.0.0/0</code>.</p>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Security Lists › Default Security List for lab02-vcn</p>
+<ol><li>Abra la lista por defecto y mire sus reglas de entrada. Verá una regla TCP con origen <code>0.0.0.0/0</code> y puerto destino 22. Esa regla es el hallazgo de seguridad más repetido de OCI, y casi nadie la revisa porque "esa lista no está asociada a nada".</li><li>Borre la regla del puerto 22 con el menú de acciones de la fila.</li><li>Deje o agregue las dos reglas ICMP. Sin ellas, el descubrimiento de MTU de ruta se rompe y las conexiones fallan de una manera difícil de diagnosticar.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Regla 1 · Source CIDR</td><td><code>0.0.0.0/0</code> · Protocol ICMP · Type <code>3</code> · Code <code>4</code></td></tr><tr><td>Regla 2 · Source CIDR</td><td><code>10.40.0.0/16</code> · Protocol ICMP · Type <code>3</code></td></tr></tbody></table></div>
+<ol><li>En las reglas de salida, deje la regla que permite todo hacia <code>0.0.0.0/0</code>. El control de salida real lo hacen las tablas de ruteo y los NSG.</li><li>Renombre la lista a <code>lab02-sl-default-endurecida</code> si la consola lo permite, para que se note en el inventario que alguien la tocó.</li></ol>
+<div class="caja c-tip"><p class="cajatit">TIP · La security list por defecto es el hallazgo más repetido</p><p>Aparece en el laboratorio A como un hallazgo alto y aparecería en casi cualquier tenancy auditado por primera vez. Tiene tres propiedades que la vuelven peligrosa: se crea sola con cada VCN, no aparece en ninguna revisión de diseño porque nadie la creó, y se hereda en silencio cada vez que alguien crea una subred sin pensar en listas.</p><p>La corrección cuesta treinta segundos y es el mejor ejemplo de "control de esfuerzo bajo" que tiene este laboratorio. En el checklist es el control R-02.</p></div>
+<h3 id="9-2-las-tres-subredes">9.2 Las tres subredes</h3>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Subnets › Create Subnet</p>
+<ol><li>Subred pública, solo para el balanceador.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-subnet-publica-lb</code></td></tr><tr><td>Subnet Type</td><td>Regional</td></tr><tr><td>IPv4 CIDR Block</td><td><code>10.40.1.0/24</code></td></tr><tr><td>Subnet Access</td><td>Public Subnet</td></tr><tr><td>Route Table</td><td><code>lab02-rt-publica</code></td></tr><tr><td>DNS Label</td><td><code>publica</code></td></tr><tr><td>Security Lists</td><td>la lista por defecto endurecida</td></tr></tbody></table></div>
+<ol><li>Subred privada de aplicación.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-subnet-privada-app</code></td></tr><tr><td>Subnet Type</td><td>Regional</td></tr><tr><td>IPv4 CIDR Block</td><td><code>10.40.2.0/24</code></td></tr><tr><td>Subnet Access</td><td><b>Private Subnet</b></td></tr><tr><td>Route Table</td><td><code>lab02-rt-app</code></td></tr><tr><td>DNS Label</td><td><code>app</code></td></tr><tr><td>Security Lists</td><td>la lista por defecto endurecida</td></tr></tbody></table></div>
+<ol><li>Subred privada de datos.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-subnet-privada-datos</code></td></tr><tr><td>Subnet Type</td><td>Regional</td></tr><tr><td>IPv4 CIDR Block</td><td><code>10.40.3.0/24</code></td></tr><tr><td>Subnet Access</td><td><b>Private Subnet</b></td></tr><tr><td>Route Table</td><td><code>lab02-rt-datos</code></td></tr><tr><td>DNS Label</td><td><code>datos</code></td></tr><tr><td>Security Lists</td><td>la lista por defecto endurecida</td></tr></tbody></table></div>
+<p>Marcar una subred como <i>Private Subnet</i> hace algo más fuerte que "no asignar IP pública por defecto": <b>la plataforma impide asignarla</b>. Cuando alguien cree una instancia ahí dentro dentro de seis meses, la opción de IP pública aparecerá deshabilitada, con la subred como explicación. Es un control que sobrevive al olvido.</p>
+<hr/>
+<h2 id="10-network-security-groups">10. Network Security Groups</h2>
+<p>Las security lists quedaron casi vacías a propósito. El filtrado real de este laboratorio vive en tres NSG, uno por función.</p>
+<pre><code>   internet --80/443--&gt; [nsg-lb] --80--&gt; [nsg-app] --3306--&gt; [nsg-datos]
+                                             ^
+                          bastion --22-------'
+                          (solo desde la IP privada del endpoint)</code></pre>
+<h3 id="10-1-crear-los-tres-grupos">10.1 Crear los tres grupos</h3>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Network Security Groups › Create Network Security Group</p>
+<ol><li>Cree <code>lab02-nsg-lb</code>. En la pantalla de reglas del asistente, no agregue ninguna todavía: presione siguiente y cree el grupo vacío.</li><li>Cree <code>lab02-nsg-app</code>, también vacío.</li><li>Cree <code>lab02-nsg-datos</code>, también vacío.</li></ol>
+<p>Se crean los tres primero porque las reglas se referencian entre sí: la del NSG de aplicación necesita que el NSG del balanceador ya exista para seleccionarlo.</p>
+<h3 id="10-2-reglas-del-nsg-del-balanceador">10.2 Reglas del NSG del balanceador</h3>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Network Security Groups › lab02-nsg-lb › Security Rules › Add Rules</p>
+<ol><li>Entrada desde internet en el 80.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Direction</td><td>Ingress</td></tr><tr><td>Source Type</td><td>CIDR</td></tr><tr><td>Source</td><td><code>0.0.0.0/0</code></td></tr><tr><td>IP Protocol</td><td>TCP</td></tr><tr><td>Destination Port Range</td><td><code>80</code></td></tr><tr><td>Description</td><td>HTTP publico hacia el balanceador</td></tr></tbody></table></div>
+<ol><li>Entrada desde internet en el 443, con los mismos campos y puerto destino <code>443</code>.</li><li>Salida hacia la aplicación, <b>y solo hacia la aplicación</b>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Direction</td><td>Egress</td></tr><tr><td>Destination Type</td><td><b>Network Security Group</b></td></tr><tr><td>Destination</td><td><code>lab02-nsg-app</code></td></tr><tr><td>IP Protocol</td><td>TCP</td></tr><tr><td>Destination Port Range</td><td><code>80</code></td></tr><tr><td>Description</td><td>Balanceador hacia la app</td></tr></tbody></table></div>
+<p>El tipo de destino <i>Network Security Group</i> es la pieza interesante: no se escribe un CIDR ni una IP, se nombra el grupo. Si mañana se agregan cuatro servidores más a la capa de aplicación, esta regla no cambia.</p>
+<h3 id="10-3-reglas-del-nsg-de-la-aplicaci-n">10.3 Reglas del NSG de la aplicación</h3>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Network Security Groups › lab02-nsg-app › Security Rules › Add Rules</p>
+<ol><li>Entrada en el 80, solo desde el balanceador.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Direction</td><td>Ingress</td></tr><tr><td>Source Type</td><td><b>Network Security Group</b></td></tr><tr><td>Source</td><td><code>lab02-nsg-lb</code></td></tr><tr><td>IP Protocol</td><td>TCP</td></tr><tr><td>Destination Port Range</td><td><code>80</code></td></tr><tr><td>Description</td><td>Solo el balanceador llega a la app</td></tr></tbody></table></div>
+<p>Note lo que esta regla <b>no</b> dice: no dice "desde la subred pública". Un recurso cualquiera colocado en la subred pública no alcanza la aplicación; solo la alcanza lo que esté dentro del NSG del balanceador.</p>
+<ol><li>La regla del puerto 22 se agrega <b>después</b>, en el capítulo 14, porque necesita la IP privada del endpoint del bastión, que todavía no existe. Déjela pendiente.</li></ol>
+<h3 id="10-4-reglas-del-nsg-de-datos">10.4 Reglas del NSG de datos</h3>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Network Security Groups › lab02-nsg-datos › Security Rules › Add Rules</p>
+<ol><li>Entrada en el puerto de la base, solo desde la aplicación.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Direction</td><td>Ingress</td></tr><tr><td>Source Type</td><td><b>Network Security Group</b></td></tr><tr><td>Source</td><td><code>lab02-nsg-app</code></td></tr><tr><td>IP Protocol</td><td>TCP</td></tr><tr><td>Destination Port Range</td><td><code>3306</code></td></tr><tr><td>Description</td><td>MySQL solo desde la app</td></tr></tbody></table></div>
+<p>En este laboratorio no hay base de datos: la regla está para que la conversación sobre la capa de datos tenga un objeto al que apuntar.</p>
+<hr/>
+<h2 id="11-instancias-de-aplicaci-n-sin-ip-p-blica">11. Instancias de aplicación, sin IP pública</h2>
+<p>Dos instancias, en la subred privada de aplicación, con el plugin de bastión habilitado y una aplicación mínima que responde en el 80.</p>
+<p class="consola"><span>Consola de OCI</span>Compute › Instances › Create Instance</p>
+<ol><li>Datos básicos.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-app-1</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Availability Domain</td><td>el primero que ofrezca la región</td></tr></tbody></table></div>
+<ol><li>En <b>Image and shape</b>, presione <i>Change image</i> y <i>Change shape</i>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Image</td><td>Oracle Linux 9, la más reciente</td></tr><tr><td>Shape series</td><td>AMD</td></tr><tr><td>Shape</td><td><code>VM.Standard.E4.Flex</code></td></tr><tr><td>OCPUs</td><td><code>1</code></td></tr><tr><td>Memory (GB)</td><td><code>8</code></td></tr></tbody></table></div>
+<ol><li>En <b>Networking</b>, seleccione la VCN y la subred privada.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Virtual cloud network</td><td><code>lab02-vcn</code></td></tr><tr><td>Subnet</td><td><code>lab02-subnet-privada-app</code></td></tr><tr><td>Public IPv4 address</td><td><b>no asignar</b> — la consola lo deshabilita porque la subred lo prohíbe</td></tr><tr><td>Hostname</td><td><code>app1</code></td></tr></tbody></table></div>
+<ol><li>En la misma sección, active el uso de NSG y seleccione el grupo de la aplicación.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Use network security groups to control traffic</td><td>activado</td></tr><tr><td>Network security group</td><td><code>lab02-nsg-app</code></td></tr></tbody></table></div>
+<ol><li>En <b>Add SSH keys</b>, pegue el contenido de su llave pública. Aunque el acceso sea por bastión, la llave se instala igual: el bastión transporta la sesión, no reemplaza la autenticación del sistema operativo.</li><li>Abra <b>Show advanced options</b> y vaya a la pestaña de <b>Oracle Cloud Agent</b>. Verifique que el plugin <b>Bastion</b> esté habilitado. Si no lo está, actívelo aquí. Sin este plugin no hay sesión SSH administrada, solo port forwarding.</li><li>En la pestaña de opciones de gestión, en el campo de datos de inicialización (<i>user data</i>), pegue la configuración de <code>cloud-init</code> del laboratorio o súbala como archivo. Lo que hace es instalar una aplicación mínima en Python que responde:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Ruta</th><th>Respuesta</th></tr></thead><tbody><tr><td><code>GET /</code></td><td>Nombre del host que atendió, número de OCPU y hora</td></tr><tr><td><code>GET /health</code></td><td><code>200 ok</code> — lo consulta el health check del balanceador</td></tr><tr><td><code>GET /burn?ms=250</code></td><td>Quema CPU durante los milisegundos indicados</td></tr></tbody></table></div>
+<ol><li>Presione <b>Create</b>. La instancia queda en aprovisionamiento unos minutos.</li><li>Repita los pasos 1 a 8 para <code>lab02-app-2</code>, con hostname <code>app2</code>.</li></ol>
+<h3 id="11-1-dos-detalles-que-rompen-el-laboratorio-si-se-omiten">11.1 Dos detalles que rompen el laboratorio si se omiten</h3>
+<p><b>El cortafuegos del sistema operativo.</b> Oracle Linux trae <code>firewalld</code> activo y con el puerto 80 cerrado. Si no se abre, el health check del balanceador nunca pasa y los backends quedan permanentemente en estado crítico, sin ninguna pista de red que lo explique —los NSG están bien, las rutas están bien—. El <code>cloud-init</code> del laboratorio lo abre. Si crea la instancia sin <code>cloud-init</code>, tendrá que entrar por el bastión y ejecutar:</p>
+<pre><code>sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --reload</code></pre>
+<p><b>El plugin de bastión tarda.</b> Después de que la instancia aparece como <i>Running</i>, el plugin necesita unos minutos más para reportarse; diez minutos desde la creación es una espera razonable antes de la primera sesión administrada. Si intenta antes, la sesión falla con un mensaje sobre el recurso destino que no menciona el plugin.</p>
+<p>Verificación:</p>
+<pre><code>oci compute instance list-vnics --instance-id "&lt;ocid-instancia&gt;" \
+  --query 'data[0].{privada:"private-ip",publica:"public-ip"}'
+# -&gt; publica debe venir en null</code></pre>
+<hr/>
+<h2 id="12-balanceador-de-carga">12. Balanceador de carga</h2>
+<p class="consola"><span>Consola de OCI</span>Networking › Load Balancers › Load Balancer › Create Load Balancer</p>
+<ol><li>Detalles del balanceador.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Load Balancer Name</td><td><code>lab02-lb</code></td></tr><tr><td>Visibility Type</td><td>Public</td></tr><tr><td>Shape</td><td>Flexible</td></tr><tr><td>Minimum Bandwidth (Mbps)</td><td><code>10</code></td></tr><tr><td>Maximum Bandwidth (Mbps)</td><td><code>100</code></td></tr></tbody></table></div>
+<ol><li>Red del balanceador. Es la <b>única</b> parte de la arquitectura que vive en la subred pública.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Virtual Cloud Network</td><td><code>lab02-vcn</code></td></tr><tr><td>Subnet</td><td><code>lab02-subnet-publica-lb</code></td></tr><tr><td>Use network security groups to control traffic</td><td>activado</td></tr><tr><td>Network security group</td><td><code>lab02-nsg-lb</code></td></tr></tbody></table></div>
+<ol><li>En la pantalla de backends, elija la política y agregue las dos instancias con <i>Add Backends</i>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Load balancing policy</td><td>Weighted Round Robin</td></tr><tr><td>Backends</td><td><code>lab02-app-1</code> y <code>lab02-app-2</code>, puerto <code>80</code></td></tr></tbody></table></div>
+<ol><li>Configure el health check en la misma pantalla.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Protocol</td><td>HTTP</td></tr><tr><td>Port</td><td><code>80</code></td></tr><tr><td>URL Path</td><td><code>/health</code></td></tr><tr><td>Status Code</td><td><code>200</code></td></tr><tr><td>Interval (ms)</td><td><code>10000</code></td></tr><tr><td>Timeout (ms)</td><td><code>3000</code></td></tr><tr><td>Number of Retries</td><td><code>3</code></td></tr></tbody></table></div>
+<ol><li>Configure el listener.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Listener Name</td><td><code>lab02-listener-http</code></td></tr><tr><td>Type of Traffic</td><td>HTTP</td></tr><tr><td>Port</td><td><code>80</code></td></tr></tbody></table></div>
+<ol><li>Presione <b>Submit</b>. El balanceador tarda varios minutos en quedar activo.</li><li>Anote la IP pública que aparece en la página de detalle. Se usa en los capítulos de WAF y de validación.</li></ol>
+<h3 id="12-1-sobre-el-listener-sin-tls">12.1 Sobre el listener sin TLS</h3>
+<p>Este listener es HTTP porque el laboratorio no debe depender de un certificado. En un ambiente con datos, el listener es 443 con certificado gestionado y el 80 únicamente redirige. Es el control B-03 del checklist, y el script de auditoría lo reporta como hallazgo <b>medio</b> en los dos laboratorios, incluido el bien construido. Está bien que lo reporte: un hallazgo en el laboratorio "correcto" prueba que el script no está amañado.</p>
+<hr/>
+<h2 id="13-waf-sobre-el-balanceador">13. WAF sobre el balanceador</h2>
+<p>Aquí está la demostración central del borde: el mismo ataque contra dos balanceadores, uno responde 200 y el otro 403.</p>
+<p>El WAF de OCI se compone de dos objetos: una <b>política</b> (las reglas) y un <b>firewall</b> (la aplicación de esa política sobre un punto de exigencia, en este caso el balanceador). En la consola el asistente los crea casi de corrido, pero conviene saber que son dos cosas, porque en la lista de recursos aparecen separados.</p>
+<h3 id="13-1-las-llaves-de-capacidad-y-sus-versiones-verificar-antes">13.1 Las llaves de capacidad y sus versiones — verificar antes</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Web Application Firewall › Policies › Create WAF policy</p>
+<p>Antes de tocar nada, entienda el punto que hace fallar esta parte del laboratorio más que ningún otro.</p>
+<div class="caja c-importante"><p class="cajatit">IMPORTANTE · Cada capacidad de protección lleva su propia versión</p><p>Las dos reglas OWASP de este laboratorio <b>no están en la misma versión</b>:</p><p>| Llave | Qué detecta | Versión | |---|---|---| | <code>941100</code> | XSS, mediante libinjection | <b>2</b> | | <code>942100</code> | Inyección SQL, mediante libinjection | <b>1</b> |</p><p>En la consola esto se ve al agregar cada capacidad a la regla de protección: cada fila de la tabla de capacidades trae <b>su propio selector de versión</b>, y el valor por defecto no es necesariamente el mismo para todas.</p><p>Es un error silencioso. Si pone la versión equivocada en una de las dos, la consola acepta la política —la crea, queda activa, el balanceador queda protegido— y la regla equivocada simplemente <b>no filtra nada</b>. No hay error, no hay advertencia, no hay estado degradado. El síntoma aparece mucho después, en la prueba: la columna con WAF devuelve 200 donde debería devolver 403.</p><p>Las versiones de la tabla se verificaron en <code>us-chicago-1</code>. <b>En otra región pueden diferir</b>: la lista de capacidades y sus versiones es propia de cada región. Verifíquelas antes de crear la política.</p></div>
+<p>Si tiene la CLI a mano, la verificación es una línea por llave:</p>
+<pre><code>for k in 941100 942100; do
+  oci waf protection-capability list --compartment-id "&lt;ocid-tenancy&gt;" \
+    --key "$k" --all \
+    --query 'data.items[].{llave:key,version:version,nombre:"display-name"}' \
+    --output table
+done</code></pre>
+<p>Si solo tiene consola, la misma información está en la tabla de selección de capacidades del asistente: cada capacidad muestra las versiones disponibles en la región. Anótelas antes de continuar.</p>
+<h3 id="13-2-crear-la-pol-tica">13.2 Crear la política</h3>
+<ol><li>Datos básicos de la política.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-waf-policy</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr></tbody></table></div>
+<ol><li>En el paso de selección del punto de exigencia, elija el balanceador como destino de la política.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Tipo de punto de exigencia</td><td>Load balancer</td></tr><tr><td>Load balancer</td><td><code>lab02-lb</code></td></tr></tbody></table></div>
+<ol><li>Defina las dos <b>acciones</b> que la política va a usar. Una permite y la otra devuelve un 403 con cuerpo propio.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Acción 1 · Name</td><td><code>permitir</code></td></tr><tr><td>Acción 1 · Type</td><td>Allow</td></tr><tr><td>Acción 2 · Name</td><td><code>bloquear-403</code></td></tr><tr><td>Acción 2 · Type</td><td>Return HTTP response</td></tr><tr><td>Acción 2 · Response code</td><td><code>403</code></td></tr><tr><td>Acción 2 · Header</td><td><code>Content-Type</code> : <code>text/plain; charset=utf-8</code></td></tr><tr><td>Acción 2 · Body type</td><td>Static text</td></tr><tr><td>Acción 2 · Body</td><td><code>403 - Solicitud bloqueada por el WAF</code></td></tr></tbody></table></div>
+<p>El cuerpo propio no es cosmético: cuando alguien pregunte si lo bloqueó el WAF o la aplicación, la respuesta es el texto que aparece en pantalla.</p>
+<ol><li>Agregue la regla de <b>control de acceso</b>, que se evalúa antes que la protección.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Rule name</td><td><code>bloquear-admin</code></td></tr><tr><td>Condition language</td><td>JMESPATH</td></tr><tr><td>Condition</td><td><code>starts_with(http.request.url.path, '/admin')</code></td></tr><tr><td>Action</td><td><code>bloquear-403</code></td></tr><tr><td>Default action de la sección</td><td><code>permitir</code></td></tr></tbody></table></div>
+<ol><li>Agregue la regla de <b>protección</b> con las dos capacidades OWASP.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Rule name</td><td><code>owasp-xss-sqli</code></td></tr><tr><td>Action</td><td><code>bloquear-403</code></td></tr><tr><td>Body inspection</td><td>desactivado</td></tr><tr><td>Capacidad 1</td><td><code>941100</code> · versión <code>2</code></td></tr><tr><td>Capacidad 2</td><td><code>942100</code> · versión <code>1</code></td></tr></tbody></table></div>
+<p>Al agregar cada capacidad, <b>mire la columna de versión de esa fila</b> y fíjela en el valor que verificó en 13.1. No asuma que la segunda hereda la de la primera.</p>
+<ol><li>Revise el resumen y presione <b>Create</b>. La política y el firewall quedan creados y asociados al balanceador.</li><li>Espere. La política tarda unos minutos en propagarse al punto de exigencia. Si prueba inmediatamente y todo devuelve 200, no concluya que las versiones están mal: espere cinco minutos y vuelva a probar.</li></ol>
+<p>Verificación:</p>
+<pre><code>oci waf web-app-firewall get --web-app-firewall-id "&lt;ocid-waf&gt;" \
+  --query 'data."lifecycle-state"'
+# -&gt; "ACTIVE"</code></pre>
+<h3 id="13-3-qu-hace-y-qu-no-hace-el-waf">13.3 Qué hace y qué no hace el WAF</h3>
+<p>El WAF no reemplaza el código seguro: compra tiempo cuando aparece una vulnerabilidad nueva y reduce el ruido de los ataques automatizados. Los payloads de la validación son de libro de texto; un atacante con intención es más sutil. Conviene decirlo antes de que lo pregunten.</p>
+<p>La regla de control de acceso sobre <code>/admin</code> es más robusta que las reglas OWASP y no depende de versiones de capacidad: si algo falla, esa fila sigue funcionando.</p>
+<hr/>
+<h2 id="14-basti-n">14. Bastión</h2>
+<p>El bastión es el capítulo donde el laboratorio hace su afirmación más incómoda: <b>el puerto 22 abierto a internet no es una necesidad operativa, es una costumbre.</b></p>
+<h3 id="14-1-crear-el-basti-n">14.1 Crear el bastión</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Bastion › Create Bastion</p>
+<ol><li>Complete el formulario.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Bastion name</td><td><code>lab02bastion</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Target virtual cloud network</td><td><code>lab02-vcn</code></td></tr><tr><td>Target subnet</td><td><code>lab02-subnet-privada-app</code></td></tr><tr><td>CIDR block allowlist</td><td><code>0.0.0.0/0</code> — vea el recuadro antes de escribir esto</td></tr><tr><td>Maximum session time-to-live</td><td><code>10800</code> segundos (3 horas)</td></tr></tbody></table></div>
+<p>El nombre del bastión admite <b>solo caracteres alfanuméricos</b>. No acepta guiones, que es por lo que este recurso rompe la convención de nombres del resto del laboratorio. Si escribe <code>lab02-bastion</code>, el formulario lo rechaza con un mensaje sobre el formato del nombre.</p>
+<ol><li>Presione <b>Create Bastion</b> y espere a que quede activo.</li><li>Anote la <b>IP privada del endpoint</b> del bastión, que aparece en la página de detalle. Es un valor dentro de <code>10.40.2.0/24</code>, y se necesita en el paso 5.</li></ol>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · La lista de CIDR está en 0.0.0.0/0 a propósito, y hay que decir por qué</p><p>En este laboratorio la lista de clientes permitidos del bastión está abierta a todo internet <b>deliberadamente</b>, porque es un ambiente desechable que se destruye el mismo día y porque la IP pública desde la que se va a demostrar no se conoce de antemano. No es una recomendación y no debe copiarse.</p><p><b>La práctica correcta en un ambiente con datos</b> es la lista restringida a los CIDR desde donde opera el equipo: la salida de la oficina, el rango de la VPN corporativa, la IP del runner de automatización. Una lista de tres entradas, revisada cuando cambia el proveedor de internet. Si el equipo es remoto y las IP son dinámicas, la respuesta es la VPN, no <code>0.0.0.0/0</code>.</p><p><b>Y ahora lo que hay que entender bien: abrir el bastión no es abrir el puerto 22.</b> Son dos cosas distintas y confundirlas lleva a conclusiones equivocadas en las dos direcciones. Quien llegue a este bastión desde cualquier punto de internet todavía necesita, simultáneamente:</p><p>- <b>credenciales válidas de OCI</b> en este tenancy, con permiso explícito sobre el recurso de bastión (verbo <code>manage</code> o <code>use</code> sobre <code>bastion-family</code> en el compartimento) para poder siquiera crear una sesión; - <b>la llave privada</b> correspondiente a la llave pública que se registró <b>en esa sesión concreta</b>, no en el bastión ni en la instancia; - que la <b>sesión esté viva</b>: cuando el TTL vence, el camino desaparece.</p><p>Un puerto 22 abierto a <code>0.0.0.0/0</code> sobre una instancia, en cambio, acepta intentos de conexión de cualquiera, sin identidad, sin registro útil y sin caducidad. La diferencia entre las dos situaciones no es de grado.</p><p>La evidencia de esto está medida en este mismo laboratorio: después de abrir la lista de clientes del bastión a <code>0.0.0.0/0</code>, <b>la auditoría volvió a dar 5 hallazgos altos contra 0</b>, exactamente igual que antes. La lista de CIDR del bastión no es una security list, y el control R-02 siguió reportando que ninguna security list abre SSH, RDP o MySQL a internet.</p></div>
+<h3 id="14-2-cerrar-el-c-rculo-la-regla-del-puerto-22">14.2 Cerrar el círculo: la regla del puerto 22</h3>
+<p>Ahora que existe el endpoint, se puede escribir la regla que faltaba en el capítulo 10.</p>
+<p class="consola"><span>Consola de OCI</span>Networking › Virtual Cloud Networks › lab02-vcn › Network Security Groups › lab02-nsg-app › Security Rules › Add Rules</p>
+<ol><li>Agregue la regla de entrada del 22.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Direction</td><td>Ingress</td></tr><tr><td>Source Type</td><td>CIDR</td></tr><tr><td>Source</td><td>la IP privada del endpoint del bastión, con máscara <code>/32</code></td></tr><tr><td>IP Protocol</td><td>TCP</td></tr><tr><td>Destination Port Range</td><td><code>22</code></td></tr><tr><td>Description</td><td>SSH solo desde el endpoint del bastion</td></tr></tbody></table></div>
+<p>Una máscara <code>/32</code>: un solo host. El puerto 22 de la aplicación existe y es alcanzable, pero desde exactamente una dirección de la red interna, que a su vez solo transporta sesiones autenticadas y con vencimiento.</p>
+<h3 id="14-3-abrir-una-sesi-n">14.3 Abrir una sesión</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Bastion › lab02bastion › Sessions › Create Session</p>
+<ol><li>Elija el tipo de sesión y complete.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Session type</td><td>Managed SSH session</td></tr><tr><td>Session name</td><td>un nombre corto con la hora, para reconocerla</td></tr><tr><td>Compute instance</td><td><code>lab02-app-1</code></td></tr><tr><td>Username</td><td><code>opc</code></td></tr><tr><td>Add SSH key</td><td>pegue el contenido de su llave pública</td></tr><tr><td>Maximum session time-to-live</td><td>hasta el máximo del bastión</td></tr></tbody></table></div>
+<ol><li>Presione <b>Create session</b>. Tarda de uno a dos minutos.</li><li>Cuando la sesión quede activa, use el menú de acciones de la fila para copiar el comando SSH que la consola genera. Ese comando trae un <code>ProxyCommand</code> que salta por el bastión.</li><li>Reemplace en el comando el marcador de la llave privada por la ruta a su llave, y ejecútelo.</li></ol>
+<div class="caja c-tip"><p class="cajatit">TIP · Sesión administrada frente a port forwarding, y cuándo falla cada una</p><p>El bastión ofrece dos tipos de sesión y no son intercambiables.</p><p><b>Managed SSH session.</b> Usa el plugin de bastión del agente de cómputo dentro de la instancia. Le da una sesión SSH al sistema operativo, con el usuario que indique. Es la que se quiere. <b>Falla cuando</b> el plugin no está habilitado en la instancia, cuando la instancia acaba de arrancar y el plugin todavía no se ha reportado (los primeros minutos), o cuando el Service Gateway no cubre todos los servicios de OCI y el agente no puede hablar con el plano de control.</p><p><b>SSH port forwarding session.</b> No usa el plugin: abre un túnel TCP hacia una IP privada y un puerto. Se conecta a <code>localhost</code> en un puerto local y el tráfico sale por el bastión. <b>No depende del plugin</b>, así que es el respaldo natural cuando la administrada falla. Es también la única opción para llegar a algo que no es una instancia con agente: una base de datos administrada, por ejemplo. <b>Falla cuando</b> la IP privada destino no es alcanzable desde el endpoint del bastión, es decir, cuando falta la regla de NSG del paso 4.</p><p><b>Las dos fallan por la misma causa cuando la causa es la red de origen:</b> si su IP pública actual no está en la lista de CIDR del bastión, la sesión <b>se crea correctamente</b> y la conexión no entra. Es el síntoma más desconcertante del laboratorio, porque la consola muestra la sesión en verde. Compare su IP (<code>curl -s ifconfig.me</code>) con la lista antes de buscar en otro lado.</p><p><b>Y las dos tienen TTL.</b> La sesión vence y desaparece; no se renueva sola. Tres horas es el máximo de este laboratorio. Si la sesión expiró, recrearla toma uno o dos minutos: no es algo que convenga hacer en medio de una demostración.</p></div>
+<h3 id="14-4-qu-mirar-una-vez-dentro">14.4 Qué mirar una vez dentro</h3>
+<p>Ya conectado a la instancia, tres comandos cuentan la historia completa:</p>
+<pre><code>hostname                        # app1
+ip -4 addr show | grep inet     # solo 10.40.2.x — ninguna IP publica
+curl -s ifconfig.me             # sale por el NAT, no por una IP propia</code></pre>
+<p>La última línea suele sorprender: la instancia <b>sí</b> alcanza internet —actualiza paquetes, llama a una API— pero por el NAT Gateway. Internet no la alcanza a ella.</p>
+<hr/>
+<h2 id="15-flow-logs">15. Flow logs</h2>
+<p>Sin registro de flujos, después de un incidente no hay forma de reconstruir quién habló con quién. Es un control barato y suele estar apagado.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Log Groups › Create Log Group</p>
+<ol><li>Cree el grupo de logs.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Name</td><td><code>lab02-logs-seguridad</code></td></tr><tr><td>Description</td><td>Registros de seguridad del laboratorio</td></tr></tbody></table></div>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Logs › Enable Service Log</p>
+<ol><li>Habilite el log de servicio sobre la subred de aplicación.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Service</td><td>Virtual Cloud Network Flow Logs</td></tr><tr><td>Resource</td><td><code>lab02-subnet-privada-app</code></td></tr><tr><td>Log Category</td><td>la categoría que cubre todos los registros de flujo</td></tr><tr><td>Log Name</td><td><code>lab02-flowlogs-app</code></td></tr><tr><td>Log Group</td><td><code>lab02-logs-seguridad</code></td></tr></tbody></table></div>
+<ol><li>En las opciones avanzadas, fije la retención.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Log Retention Duration</td><td><code>30</code> días</td></tr></tbody></table></div>
+<ol><li>Presione <b>Enable Log</b>. Los primeros registros tardan varios minutos en aparecer.</li><li>Genere tráfico —basta con abrir la IP del balanceador en el navegador unas veces— y vuelva al log. Use <b>Explore Log</b> o la búsqueda del propio log para ver las entradas.</li></ol>
+<p>Cada entrada trae origen, destino, puerto, protocolo, si el paquete fue aceptado o rechazado, y el momento. En una investigación real esa es la diferencia entre creer que entraron por ahí y saberlo, con hora y dirección.</p>
+<p>Treinta días de retención es una decisión de laboratorio. En un ambiente con datos se decide con el equipo legal y el de seguridad, y los registros suelen enviarse a un SIEM o a Logging Analytics para correlacionarlos con los de aplicación y los de Audit.</p>
+<hr/>
+<h2 id="16-alertas-ante-cambios-cr-ticos">16. Alertas ante cambios críticos</h2>
+<p>Un cambio de regla de red a las dos de la mañana debería despertar a alguien, no descubrirse una semana después. Este capítulo conecta dos servicios: Events, que escucha el plano de control, y Notifications, que entrega el correo.</p>
+<h3 id="16-1-el-tema-y-la-suscripci-n">16.1 El tema y la suscripción</h3>
+<p class="consola"><span>Consola de OCI</span>Developer Services › Application Integration › Notifications › Create Topic</p>
+<ol><li>Cree el tema.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-alertas-seguridad</code></td></tr><tr><td>Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Description</td><td>Cambios criticos de red e IAM</td></tr></tbody></table></div>
+<ol><li>Dentro del tema, use <b>Create Subscription</b>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Protocol</td><td>Email</td></tr><tr><td>Email</td><td>el buzón que va a recibir las alertas, por ejemplo <code>alertas@ejemplo.com</code></td></tr></tbody></table></div>
+<ol><li><b>Vaya al correo y haga clic en el enlace de confirmación.</b> Hasta que lo haga, la suscripción queda en estado pendiente y <b>no llega ninguna alerta</b>. Es el paso que más se olvida de todo el manual, y su síntoma —silencio— es indistinguible de "no ha pasado nada".</li></ol>
+<h3 id="16-2-la-regla-de-eventos">16.2 La regla de eventos</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Events Service › Rules › Create Rule</p>
+<ol><li>Datos de la regla.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Display Name</td><td><code>lab02-cambios-criticos</code></td></tr><tr><td>Description</td><td>Cambios en security lists, NSGs y politicas IAM</td></tr><tr><td>Rule Conditions · Condition</td><td>Event Type</td></tr></tbody></table></div>
+<ol><li>Agregue los tipos de evento. En la consola se eligen por servicio y luego por tipo; los identificadores correspondientes son:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Servicio</th><th>Tipo de evento</th></tr></thead><tbody><tr><td>Networking</td><td><code>com.oraclecloud.virtualnetwork.updatesecuritylist</code></td></tr><tr><td>Networking</td><td><code>com.oraclecloud.virtualnetwork.updatenetworksecuritygroupsecurityrules</code></td></tr><tr><td>Networking</td><td><code>com.oraclecloud.virtualnetwork.addnetworksecuritygroupsecurityrules</code></td></tr><tr><td>Identity</td><td><code>com.oraclecloud.identitycontrolplane.createpolicy</code></td></tr><tr><td>Identity</td><td><code>com.oraclecloud.identitycontrolplane.updatepolicy</code></td></tr><tr><td>Identity</td><td><code>com.oraclecloud.identitycontrolplane.deletepolicy</code></td></tr></tbody></table></div>
+<p>Si algún tipo de evento no aparece en la lista de su región, quítelo y deje los de security list e IAM. La demostración funciona igual.</p>
+<ol><li>En <b>Actions</b>, agregue la acción de notificación.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Action Type</td><td>Notifications</td></tr><tr><td>Notifications Compartment</td><td><code>lab-02-seguridad</code></td></tr><tr><td>Topic</td><td><code>lab02-alertas-seguridad</code></td></tr></tbody></table></div>
+<ol><li>Presione <b>Create Rule</b>.</li></ol>
+<h3 id="16-3-probar-que-funciona">16.3 Probar que funciona</h3>
+<ol><li>Vaya a la VCN, entre a la security list por defecto y agregue cualquier regla inocua —por ejemplo, entrada ICMP desde el CIDR de la VCN—. Guarde.</li><li>Espere uno o dos minutos. El correo debe llegar con el detalle del evento: quién lo hizo, sobre qué recurso, a qué hora.</li><li>Quite la regla que agregó.</li></ol>
+<p>Ese correo es una alerta <b>reactiva</b>: avisa después de que el cambio ocurrió. El capítulo siguiente es la versión preventiva del mismo problema.</p>
+<hr/>
+<h2 id="17-security-zone">17. Security Zone</h2>
+<p>Cloud Guard detecta. Una Security Zone <b>impide</b>. La diferencia se resume así: detectar le avisa a las tres de la mañana; prevenir no lo despierta.</p>
+<p>Una Security Zone asocia una <b>receta</b> de políticas a un <b>compartimento</b>. Desde ese momento, cualquier operación en ese compartimento que viole una política de la receta es rechazada por la plataforma en el momento de crearse. No hay remediación posterior, no hay ventana de exposición: el recurso no llega a existir.</p>
+<h3 id="17-1-la-receta">17.1 La receta</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Security Zones › Recipes › Create Recipe</p>
+<ol><li>Datos de la receta.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-receta-demo</code></td></tr><tr><td>Compartment</td><td><code>lab</code></td></tr></tbody></table></div>
+<ol><li>En la lista de políticas disponibles, marque <b>solamente</b> la que prohíbe que los buckets de Object Storage tengan acceso público. Está en la categoría de restricción de acceso público; el nombre exacto en la consola describe la denegación de buckets públicos <code>[VALIDAR el nombre exacto en su región]</code>.</li><li>Presione <b>Create</b>.</li></ol>
+<p>Por qué solo una política: la receta máxima que Oracle provee exige, entre otras cosas, llaves de Vault propias en buckets y volúmenes. Con esa receta, <b>hasta el bucket privado del capítulo 17.3 sería rechazado</b>, y el mensaje del ejercicio —lo que cumple pasa sin fricción, lo que no cumple no pasa— se pierde en un muro indiferenciado.</p>
+<h3 id="17-2-la-zona">17.2 La zona</h3>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Security Zones › Create Security Zone</p>
+<ol><li>Complete el formulario.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab02-zona-demo</code></td></tr><tr><td>Compartment</td><td><code>lab-02-zona-segura</code></td></tr><tr><td>Security Zone Recipe</td><td><code>lab02-receta-demo</code></td></tr></tbody></table></div>
+<ol><li>Presione <b>Create</b>. La zona queda asociada al compartimento vacío que se creó en el capítulo 4.</li></ol>
+<p>Se usa un compartimento vacío a propósito. Asociar una zona a un compartimento que ya tiene recursos no borra lo que viola la política, pero sí bloquea operaciones posteriores sobre esos recursos, y eso produce sorpresas. Se planea <b>antes</b> de poblar el compartimento.</p>
+<h3 id="17-3-qu-bloquea-de-verdad">17.3 Qué bloquea de verdad</h3>
+<p>La prueba está automatizada en <code>scripts/40-prueba-security-zone.sh</code>, que hace exactamente dos cosas y una limpieza:</p>
+<pre><code>./40-prueba-security-zone.sh "&lt;ocid-lab-02-zona-segura&gt;"</code></pre>
+<div class="tablacaja"><table><thead><tr><th>Paso</th><th>Operación</th><th>Resultado esperado</th></tr></thead><tbody><tr><td>1</td><td>Crear un bucket <b>privado</b> en el compartimento de la zona</td><td><b>Se crea.</b> Lo que cumple la política pasa sin fricción</td></tr><tr><td>2</td><td>Crear un bucket <b>público</b> en el mismo compartimento</td><td><b>Se rechaza</b>, con un error que cita la política de la zona</td></tr><tr><td>3</td><td>Borrar el bucket privado</td><td>Limpieza</td></tr></tbody></table></div>
+<p>El mismo par de operaciones se puede hacer por consola: <b>Storage › Buckets › Create Bucket</b> en el compartimento <code>lab-02-zona-segura</code>, una vez con acceso <code>NoPublicAccess</code> y otra marcando la visibilidad pública. La segunda falla, y el mensaje de error nombra la política de la Security Zone que la rechazó.</p>
+<p>Lo importante del paso 1 es que <b>no falle</b>. Una barrera que bloquea todo no es una barrera, es una pared, y nadie la deja puesta: lo que convence es que el trabajo legítimo pase sin pedir permiso.</p>
+<p>Qué no bloquea: la Security Zone actúa sobre <b>operaciones del plano de control en ese compartimento</b>. No inspecciona el contenido de los objetos, no evalúa lo que pasa dentro de una instancia y no alcanza a otros compartimentos.</p>
+<hr/>
+<h2 id="18-validaci-n-de-extremo-a-extremo">18. Validación de extremo a extremo</h2>
+<p>Tres pruebas. Las tres están automatizadas en <code>scripts/</code>, y las tres se pueden hacer a mano si no tiene la CLI.</p>
+<h3 id="18-1-la-auditor-a-el-contraste-en-n-meros">18.1 La auditoría: el contraste en números</h3>
+<p>La prueba principal del módulo: <b>el mismo script, contra los dos laboratorios.</b></p>
+<pre><code>cd talleres/02-seguridad/scripts
+./10-auditoria-rapida.sh "&lt;ocid-lab-01-elasticidad&gt;" "&lt;ocid-tenancy&gt;"   # el laboratorio A
+./10-auditoria-rapida.sh "&lt;ocid-lab-02-seguridad&gt;" "&lt;ocid-tenancy&gt;"   # el laboratorio B</code></pre>
+<p>El script es de <b>solo lectura</b>: ejecuta únicamente operaciones de listar y consultar —no crea, no modifica, no borra—, así que es seguro entregárselo a un tercero para que lo corra contra su propio tenancy con un usuario de solo lectura.</p>
+<p>Resultado medido:</p>
+<div class="tablacaja"><table><thead><tr><th></th><th>Laboratorio A (el «antes»)</th><th>Laboratorio B (el «después»)</th></tr></thead><tbody><tr><td>Hallazgos altos</td><td><b>5</b></td><td><b>0</b></td></tr><tr><td>Medios</td><td>3</td><td>2</td></tr><tr><td>Controles que cumplen</td><td>2</td><td><b>6</b></td></tr></tbody></table></div>
+<p>Los cinco altos del laboratorio A, uno por uno:</p>
+<div class="tablacaja"><table><thead><tr><th>Control</th><th>Hallazgo</th></tr></thead><tbody><tr><td>B-02</td><td>Balanceador público <code>lab01-lb</code> sin WAF</td></tr><tr><td>R-01</td><td>Instancia del pool con IP pública</td></tr><tr><td>R-01</td><td>Segunda instancia del pool con IP pública</td></tr><tr><td>R-02</td><td>Security list por defecto de <code>lab01-vcn</code> abre el 22 a <code>0.0.0.0/0</code></td></tr><tr><td>R-02</td><td>Security list <code>lab01-sl-app</code> abre el 22 a <code>0.0.0.0/0</code></td></tr></tbody></table></div>
+<p>Y los dos medios que <b>sí</b> aparecen en el laboratorio bien construido:</p>
+<div class="tablacaja"><table><thead><tr><th>Control</th><th>Hallazgo</th></tr></thead><tbody><tr><td>B-03</td><td>El balanceador tiene un listener sin TLS</td></tr><tr><td>R-01</td><td>La subred pública permite IP pública — válido, porque ahí solo vive el balanceador</td></tr></tbody></table></div>
+<div class="caja c-validacion"><p class="cajatit">VALIDACIÓN · Cómo saber que el laboratorio quedó bien</p><p>La auditoría del laboratorio B debe terminar en <b>0 hallazgos altos</b>, con estos seis controles en estado <code>ok</code>:</p><p>| Control | Texto esperado | |---|---| | B-02 | El balanceador tiene WAF | | D-02 | Sin buckets públicos en el compartimento | | L-02 | 1 flow log activo | | R-01 | Ninguna instancia en ejecución tiene IP pública | | R-02 | Ninguna security list abre SSH, RDP o MySQL a internet | | R-03 | Ningún NSG abre SSH a internet |</p><p>Si aparece un alto en R-01, quedó una instancia con IP pública: revise en qué subred la creó. Si aparece en R-02, la security list por defecto no se endureció (capítulo 9.1). Si aparece en B-02, el WAF no quedó asociado al balanceador: revise que el punto de exigencia de la política sea <code>lab02-lb</code>.</p><p>Las salidas quedan guardadas automáticamente en <code>evidencias/</code> con fecha y hora. Correr el script contra los dos laboratorios es además la mejor prueba de que el script sirve: debe encontrar problemas en uno y no en el otro.</p></div>
+<h3 id="18-2-la-prueba-del-waf-200-contra-403">18.2 La prueba del WAF: 200 contra 403</h3>
+<pre><code>./20-prueba-waf.sh "&lt;ip-lb-laboratorio-A&gt;" "&lt;ip-lb-laboratorio-B&gt;"</code></pre>
+<p>Cuatro solicitudes contra cada balanceador. Resultado medido:</p>
+<pre><code>Solicitud                          Sin WAF     Con WAF
+Normal         GET /               200         200
+XSS            GET /?q=&lt;script&gt;    200         403
+SQL injection  GET /?id=1' OR '1'= 200         403
+Ruta admin     GET /admin          200         403</code></pre>
+<p>La primera fila es la que da sentido a las otras tres: el tráfico legítimo pasa igual por los dos lados. Si la fila normal diera 403, el WAF estaría roto, no protegiendo.</p>
+<p>A mano, sin script, la misma prueba son cuatro comandos:</p>
+<pre><code>LB="&lt;ip-del-balanceador-con-waf&gt;"
+curl -s -o /dev/null -w '%{http_code}\n' "http://$LB/"
+curl -s -o /dev/null -w '%{http_code}\n' "http://$LB/?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+curl -s -o /dev/null -w '%{http_code}\n' "http://$LB/?id=1%27%20OR%20%271%27%3D%271"
+curl -s -o /dev/null -w '%{http_code}\n' "http://$LB/admin"</code></pre>
+<p>Si la segunda línea devuelve 200 contra el balanceador con WAF, el problema casi siempre es la versión de la capacidad <code>941100</code>: vuelva al capítulo 13.1.</p>
+<h3 id="18-3-el-basti-n-hacia-una-m-quina-sin-ip-p-blica">18.3 El bastión hacia una máquina sin IP pública</h3>
+<pre><code>./30-sesion-bastion.sh 3600</code></pre>
+<p>El script crea la sesión, intenta primero la administrada, cae a port forwarding si la administrada falla, y deja el comando SSH armado y listo para pegar. Resultado medido: conexión establecida a una instancia <b>sin IP pública</b>, en la subred <code>10.40.2.0/24</code>.</p>
+<p>Dos detalles que el script resuelve y que hay que conocer si se hace a mano:</p>
+<ul><li><b>La ruta de la llave privada va entre comillas simples</b>, en una variable aparte. Si el directorio del usuario tiene un espacio —lo normal en Windows— el comando se parte y falla con un mensaje sobre el archivo de identidad inaccesible. Y no pueden ser comillas dobles: el <code>ProxyCommand</code> ya viene envuelto en dobles y unas dobles adentro lo cierran antes de tiempo, con un error desconcertante sobre caracteres inválidos en el nombre de usuario remoto.</li><li><b>La primera conexión pide aceptar la huella dos veces</b>, la del bastión y la del salto interno. El script agrega <code>StrictHostKeyChecking=accept-new</code>, que acepta huellas nuevas y sigue avisando si una conocida <b>cambia</b>, que es el caso que importa.</li></ul>
+<h3 id="18-4-la-barrera-preventiva">18.4 La barrera preventiva</h3>
+<pre><code>./40-prueba-security-zone.sh "&lt;ocid-lab-02-zona-segura&gt;"</code></pre>
+<p>Esperado: el bucket privado se crea, el público se rechaza citando la política. Detalle en el capítulo 17.3.</p>
+<hr/>
+<h2 id="19-qu-puede-salir-mal">19. Qué puede salir mal</h2>
+<p>Errores reales, documentados durante la construcción y el ensayo de este laboratorio. No son hipótesis.</p>
+<h3 id="19-1-waf">19.1 WAF</h3>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>El WAF devuelve 200 al XSS pero 403 a <code>/admin</code></td><td>Versión equivocada en la capacidad <code>941100</code>. La política se creó sin error y la regla no filtra</td><td>Capítulo 13.1: <code>941100</code> va en versión <b>2</b>, <code>942100</code> en versión <b>1</b>. Verificar por región</td></tr><tr><td>El WAF devuelve 200 a todo, recién creado</td><td>La política todavía no se propagó al punto de exigencia</td><td>Esperar cinco minutos y repetir</td></tr><tr><td>La creación de la política falla mencionando una capacidad de protección</td><td>La llave o la versión no existe en esa región</td><td>Listar las capacidades de la región y ajustar</td></tr><tr><td>La creación de la política falla mencionando la condición</td><td>Sintaxis JMESPATH de la regla de <code>/admin</code></td><td>Quitar la regla de control de acceso. La demostración pierde una fila, nada más</td></tr></tbody></table></div>
+<h3 id="19-2-balanceador">19.2 Balanceador</h3>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>Los backends quedan en estado crítico, permanentemente</td><td><code>firewalld</code> bloquea el 80 en las instancias</td><td>Entrar por bastión y abrir el puerto (capítulo 11.1)</td></tr><tr><td>Los backends quedan en estado crítico</td><td>Falta la regla de salida del NSG del balanceador hacia el NSG de la aplicación</td><td>Capítulo 10.2, paso 6</td></tr><tr><td>El balanceador responde pero la aplicación nunca</td><td>La aplicación no arrancó: <code>cloud-init</code> no se aplicó</td><td>Entrar por bastión y revisar el servicio</td></tr></tbody></table></div>
+<h3 id="19-3-basti-n">19.3 Bastión</h3>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>La sesión aparece activa y la conexión no entra</td><td>La IP pública de origen no está en la lista de CIDR del bastión</td><td>Comparar <code>curl -s ifconfig.me</code> con la lista y actualizarla</td></tr><tr><td>La sesión administrada falla al crearse</td><td>El plugin de bastión aún no se ha reportado</td><td>Esperar diez minutos desde el arranque de la instancia, o usar port forwarding</td></tr><tr><td>La sesión administrada falla siempre</td><td>El Service Gateway cubre solo Object Storage: el agente no alcanza el plano de control</td><td>Capítulo 7, paso 4: elegir todos los servicios de la región</td></tr><tr><td>El puerto 22 no responde a través del túnel</td><td>Falta la regla de NSG desde la IP del endpoint</td><td>Capítulo 14.2</td></tr><tr><td>La creación del bastión falla por el nombre</td><td>El nombre admite solo alfanuméricos</td><td>Usar <code>lab02bastion</code>, sin guiones</td></tr><tr><td>«Identity file not accessible» al pegar el comando</td><td>La ruta de la llave tiene un espacio y va sin comillas</td><td>Comillas <b>simples</b>, en variable aparte (capítulo 18.3)</td></tr><tr><td>«remote username contains invalid characters»</td><td>Se usaron comillas dobles dentro del <code>ProxyCommand</code>, que ya va entre dobles</td><td>Comillas simples</td></tr><tr><td>La conexión funcionaba y dejó de funcionar</td><td>El TTL de la sesión venció</td><td>Crear una sesión nueva: uno o dos minutos</td></tr></tbody></table></div>
+<h3 id="19-4-cloud-guard-alertas-y-zona">19.4 Cloud Guard, alertas y zona</h3>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>Cloud Guard no se habilita por CLI, con un error de autorización</td><td>Faltan las políticas de servicio, que la consola crea sola</td><td>Habilitarlo por consola (capítulo 5)</td></tr><tr><td>Cloud Guard habilitado y la pantalla de problemas vacía</td><td>Todavía no ha hecho un barrido, o los recursos son muy recientes</td><td>Dejar pasar horas. Habilitarlo antes de construir</td></tr><tr><td>No llega ningún correo de alerta</td><td>La suscripción quedó pendiente: falta el clic en el correo de confirmación</td><td>Capítulo 16.1, paso 3</td></tr><tr><td>La regla de eventos no se puede crear</td><td>Algún tipo de evento no se reconoce en la región</td><td>Quitar los tipos de NSG y dejar security lists e IAM</td></tr><tr><td>La Security Zone rechaza también el bucket privado</td><td>La receta es más estricta de lo esperado: exige llaves de Vault</td><td>Usar una receta propia con una sola política (capítulo 17.1)</td></tr><tr><td>El bucket público <b>sí</b> se crea</td><td>La receta no incluye la política de denegación de buckets públicos</td><td>Revisar la receta y volver a asociarla</td></tr></tbody></table></div>
+<h3 id="19-5-construcci-n-en-general">19.5 Construcción en general</h3>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>El compartimento recién creado no aparece en un formulario</td><td>Todavía se está propagando</td><td>Esperar dos minutos y recargar</td></tr><tr><td>No se puede crear el balanceador o la segunda instancia</td><td>Límite de la cuenta de prueba</td><td>Construir un laboratorio a la vez, o bajar a una instancia</td></tr><tr><td>La instancia no ofrece asignar IP pública</td><td>La subred es privada. <b>Funciona como debe</b></td><td>No es un error</td></tr><tr><td>Falta <code>jq</code> al correr el script de auditoría</td><td>Dependencia no instalada</td><td><code>winget install jqlang.jq</code> en Windows, o el gestor de paquetes del sistema</td></tr></tbody></table></div>
+<hr/>
+<h2 id="20-limpieza">20. Limpieza</h2>
+<p>El orden importa: hay recursos que bloquean el borrado de otros.</p>
+<h3 id="20-1-orden-de-borrado">20.1 Orden de borrado</h3>
+<ol><li><b>Sesiones activas del bastión</b> — Identity &amp; Security › Bastion › lab02bastion › Sessions. Una sesión viva bloquea el borrado del bastión durante varios minutos, con un mensaje sobre el recurso en uso.</li><li><b>El firewall de aplicación y después su política</b> — Identity &amp; Security › Web Application Firewall. Al revés no se deja.</li><li><b>El balanceador</b> — Networking › Load Balancers › lab02-lb › Delete. Esto libera los backends.</li><li><b>Las instancias</b> — Compute › Instances. Marque la opción de borrar también el volumen de arranque; si no la marca, los volúmenes quedan.</li><li><b>El bastión.</b></li><li><b>Los logs y el grupo de logs.</b> El log de flujos primero, el grupo después.</li><li><b>La regla de eventos, la suscripción y el tema de notificaciones.</b></li><li><b>La red, en este orden:</b> subredes, NSG, tablas de ruteo, gateways y por último la VCN. Si un objeto se niega a borrarse, algo lo está referenciando; la consola dice qué.</li><li><b>El laboratorio A</b>, completo, con la misma secuencia.</li><li><b>Los compartimentos</b>, si ya no los va a usar. Un compartimento vacío no cuesta nada, pero deja ruido en el inventario.</li></ol>
+<p>Si tiene el módulo de Terraform, todo lo anterior es <code>scripts/99-destroy.sh</code>, que además cierra las sesiones del bastión antes de destruir.</p>
+<h3 id="20-2-qu-se-queda-y-por-qu-est-bien">20.2 Qué se queda, y por qué está bien</h3>
+<div class="tablacaja"><table><thead><tr><th>Recurso</th><th>Se queda</th><th>Costo</th></tr></thead><tbody><tr><td>Cloud Guard</td><td>Sí, encendido</td><td>Sin costo adicional</td></tr><tr><td>Security Zone y su receta</td><td>Sí</td><td>Sin costo adicional</td></tr><tr><td>Compartimento de la zona</td><td>Sí, vacío</td><td>Sin costo</td></tr><tr><td>Presupuesto y alertas de costo</td><td>Sí</td><td>Sin costo</td></tr></tbody></table></div>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · Lo que sigue cobrando si la limpieza queda a medias</p><p>El balanceador flexible y el WAF consumen crédito <b>aunque no reciban una sola solicitud</b>: se cobran por estar aprovisionados, no por tráfico. Son, con diferencia, lo más caro de este laboratorio.</p><p>Las instancias detenidas dejan de cobrar cómputo, pero <b>sus volúmenes de arranque siguen cobrando almacenamiento</b>. Si al borrar una instancia no marcó la opción de borrar el volumen, el volumen sigue ahí y sigue cobrando: revise <b>Storage › Block Volumes</b> en el compartimento después de la limpieza.</p><p>Las IP públicas reservadas, si llegó a crear alguna, cobran mientras no estén asignadas a nada. Revise <b>Networking › IP Management</b>.</p><p>El orden de magnitud de este laboratorio es de unidades de dólar: el ensayo completo de los cinco laboratorios del conjunto midió <b>0,13 USD</b> de cómputo al momento de cerrar, con un presupuesto que proyectaba <b>2,10 USD</b> contra un límite de 150. Esa cifra es baja porque el teardown fue diario. Un balanceador con WAF olvidado durante un mes es otra conversación.</p></div>
+<h3 id="20-3-verificar-que-qued-limpio">20.3 Verificar que quedó limpio</h3>
+<p class="consola"><span>Consola de OCI</span>Governance &amp; Administration › Tenancy Explorer</p>
+<p>Filtre por el compartimento <code>lab</code> y sus hijos: debería quedar vacío salvo los compartimentos mismos. Para el costo, <b>Billing &amp; Cost Management › Cost Analysis</b>, filtrando por la etiqueta <code>Efimero = si</code>; los datos de consumo tardan horas en consolidar, así que la cifra del mismo día siempre será menor que la real.</p>
+<hr/>
+<h2 id="21-documentaci-n-oficial">21. Documentación oficial</h2>
+<p>Enlaces a las páginas generales de cada servicio. Las rutas profundas de la documentación cambian entre versiones; desde estas páginas la navegación lateral lleva al procedimiento exacto.</p>
+<div class="tablacaja"><table><thead><tr><th>Tema</th><th>Enlace</th></tr></thead><tbody><tr><td>Redes virtuales (VCN, subredes, gateways)</td><td>https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/overview.htm</td></tr><tr><td>Network Security Groups</td><td>https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/networksecuritygroups.htm</td></tr><tr><td>Cómputo</td><td>https://docs.oracle.com/en-us/iaas/Content/Compute/Concepts/computeoverview.htm</td></tr><tr><td>Load Balancer</td><td>https://docs.oracle.com/en-us/iaas/Content/Balance/Concepts/balanceoverview.htm</td></tr><tr><td>Web Application Firewall</td><td>https://docs.oracle.com/en-us/iaas/Content/WAF/Concepts/overview.htm</td></tr><tr><td>Bastion</td><td>https://docs.oracle.com/en-us/iaas/Content/Bastion/Concepts/bastionoverview.htm</td></tr><tr><td>Logging y flow logs</td><td>https://docs.oracle.com/en-us/iaas/Content/Logging/Concepts/loggingoverview.htm</td></tr><tr><td>Events Service</td><td>https://docs.oracle.com/en-us/iaas/Content/Events/Concepts/eventsoverview.htm</td></tr><tr><td>Notifications</td><td>https://docs.oracle.com/en-us/iaas/Content/Notification/Concepts/notificationoverview.htm</td></tr><tr><td>Audit</td><td>https://docs.oracle.com/en-us/iaas/Content/Audit/Concepts/auditoverview.htm</td></tr><tr><td>Cloud Guard</td><td>https://docs.oracle.com/en-us/iaas/cloud-guard/home.htm</td></tr><tr><td>Security Zones</td><td>https://docs.oracle.com/en-us/iaas/security-zone/home.htm</td></tr><tr><td>Identidad y políticas</td><td>https://docs.oracle.com/en-us/iaas/Content/Identity/Concepts/overview.htm</td></tr><tr><td>Límites de servicio</td><td>https://docs.oracle.com/en-us/iaas/Content/General/Concepts/servicelimits.htm</td></tr></tbody></table></div>
+<p>Referencia externa para la conversación de cumplimiento: el <b>CIS OCI Foundations Benchmark</b>, que da una línea base reconocida para medir avance y responder auditorías. El script de auditoría de este laboratorio es una muestra deliberadamente pequeña: para postura continua se usa Cloud Guard, y para cumplimiento, el benchmark.</p>
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

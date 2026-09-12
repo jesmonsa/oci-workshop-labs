@@ -1,0 +1,34 @@
+.consola{background:var(--tinta);color:var(--plano);border-radius:8px;padding:11px 15px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px;
+  margin:18px 0 10px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+.consola code{color:#bcd6ea;background:none;padding:0}
+.consola span{font-family:inherit;font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+  opacity:.62;font-weight:600}
+.caja{border-left:3px solid;border-radius:0 8px 8px 0;padding:14px 18px;margin:18px 0;font-size:14.5px}
+.caja p{margin:0 0 8px;max-width:none}.caja p:last-child{margin-bottom:0}
+.cajatit{font-weight:700;font-size:12.5px;letter-spacing:.05em;text-transform:uppercase}
+.c-tip{background:#eaf4f8;border-color:#1f6f8b}.c-tip .cajatit{color:#17586f}
+.c-importante{background:#fdf3f1;border-color:#c74634}.c-importante .cajatit{color:#9d3125}
+.c-validacion{background:#edf7f1;border-color:#1e7b4d}.c-validacion .cajatit{color:#166039}
+.c-cuidado{background:#fdf4e8;border-color:#a85a00}.c-cuidado .cajatit{color:#8a4a00}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .c-tip{background:#11242b}
+  :root:not([data-theme=light]) .c-importante{background:#2b1512}
+  :root:not([data-theme=light]) .c-validacion{background:#102219}
+  :root:not([data-theme=light]) .c-cuidado{background:#2a1d0c}
+  :root:not([data-theme=light]) .caja{color:var(--tinta-2)}}
+.tablacaja{overflow-x:auto;margin:8px 0 18px}
+.indice{background:var(--superficie);border:1px solid var(--borde);border-radius:10px;
+  padding:18px 22px;margin:26px 0 34px}
+.indice p{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-3);
+  font-weight:600;margin:0 0 10px}
+.indice ol{margin:0;padding-left:0;list-style:none;font-size:14.5px;columns:2;column-gap:34px}
+.indice li{break-inside:avoid}
+@media (max-width:640px){.indice ol{columns:1}}
+.descarga{display:inline-flex;align-items:center;gap:10px;background:var(--superficie);
+  border:1px solid var(--borde);border-radius:9px;padding:11px 17px;font-size:14.5px;
+  font-weight:600;margin:4px 0 8px}
+.descarga:hover{border-color:var(--acento);text-decoration:none}
+.ficha{display:flex;gap:28px;flex-wrap:wrap;font-size:14px;color:var(--tinta-2);margin:0 0 8px}
+.ficha b{color:var(--tinta);display:block;font-size:12.5px;text-transform:uppercase;
+  letter-spacing:.04em;font-weight:600}
+hr{border:0;border-top:1px solid var(--linea);margin:30px 0}

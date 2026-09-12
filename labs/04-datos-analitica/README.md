@@ -39,6 +39,13 @@ Tres millones de documentos sintéticos y un tablero que encuentra dos cosas que
 El detalle completo, con todos los comandos y la tabla de diagnóstico de fallos, está en
 [`docs/MANUAL.md`](docs/MANUAL.md).
 
+## Hacerlo a mano, en la consola
+
+El mismo módulo está escrito pantalla por pantalla, para construirlo desde la consola de
+Oracle Cloud sin Terraform: [`docs/MANUAL-CONSOLA.md`](docs/MANUAL-CONSOLA.md) ·
+[versión web](https://jesmonsa.github.io/oci-workshop-labs/manuales/04-datos-analitica.html) ·
+[PDF](https://jesmonsa.github.io/oci-workshop-labs/pdf/Manual-Consola-04-Datos.pdf)
+
 ## Qué se simplificó, y por qué
 
 Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal.

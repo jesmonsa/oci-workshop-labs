@@ -30,8 +30,11 @@ variable "ssh_public_key" {
 variable "ips_admin_cidr" {
   description = <<-EOT
     IPs desde las que se permite abrir sesiones de Bastion, en CIDR.
-    OJO: en la preparación en la sala de la organización tu IP pública será otra. Actualizar a las 13:45
-    con `curl -s ifconfig.me` y `terraform apply` (el cambio es en caliente, no recrea nada).
+
+    En el tenancy de demostración está en 0.0.0.0/0 para que la sesión funcione
+    desde cualquier sala. Abrir el Bastion no es abrir el puerto 22: quien llegue
+    sigue necesitando credenciales de OCI con permiso sobre el bastión y la llave
+    privada de la sesión. Para un ambiente con datos, la lista va restringida.
   EOT
   type        = list(string)
 }

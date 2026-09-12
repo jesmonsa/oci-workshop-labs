@@ -4,7 +4,7 @@
 <title>Módulo 03 · Un agente que no puede hacer daño</title>
 <link rel="stylesheet" href="../estilos.css">
 </head><body>
-<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html" class="activo">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../manuales.html">Manuales</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html" class="activo">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
 
 <header class="principal"><div class="envoltura">
   <span class="etiqueta">Módulo 03</span>
@@ -49,6 +49,15 @@
   <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
     <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/03-agente-ia/docs/MANUAL.md">el manual del módulo</a>.</p>
   <ol class="pasos"><li><h3>Instalar y probar sin credenciales</h3><p><code>--catalogo</code> muestra las ocho herramientas y <code>--autoprueba</code> ejercita la capa de validación. Los dos funcionan sin cuenta de nube y sin modelo: si fallan, el problema es el entorno.</p></li><li><h3>Comprobar si hay modelos disponibles</h3><p>El servicio de IA generativa no está en todas las regiones. El agente descubre el modelo por su cuenta en vez de traer un identificador fijo, que es la forma más segura de que algo falle meses después.</p></li><li><h3>Preguntar contra el laboratorio</h3><p>«¿cuántas máquinas hay corriendo?», «¿alguna tiene IP pública?», «¿cuánto llevamos gastando este mes?». Cada respuesta imprime tres líneas: lo que propuso el modelo, lo que decidió el validador, y el resultado.</p></li><li><h3>Pedirle algo que no debe hacer</h3><p>«apaga la instancia app-1». Termina en <code>RECHAZADA · no se ejecutó nada</code>. Es el momento que sostiene el módulo.</p></li><li><h3>Intentar una inyección de instrucciones</h3><p>Mismo rechazo. Ninguna instrucción escrita puede sacar al agente de su catálogo, porque el catálogo no se decide con texto.</p></li><li><h3>Leer la bitácora</h3><p>Una línea por interacción. No guarda los datos devueltos, solo cuántas filas: una bitácora que copia lo consultado se convierte ella misma en un problema de seguridad.</p></li></ol>
+</section>
+
+<section>
+  <h2>Hacerlo a mano, en la consola</h2>
+  <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la
+  consola de Oracle Cloud sin Terraform. Sirve para entender qué hay debajo del código, y
+  para que alguien que nunca ha tocado OCI pueda reproducirlo solo.</p>
+  <p><a href="../manuales/03-agente-ia.html">Ver el manual de consola</a> ·
+  <a href="../pdf/Manual-Consola-03-Agente-IA.pdf">descargarlo en PDF</a></p>
 </section>
 
 <section>

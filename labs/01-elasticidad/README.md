@@ -46,6 +46,13 @@ Un grupo de instancias detrás de un balanceador que crece bajo carga y vuelve a
 El detalle completo, con todos los comandos y la tabla de diagnóstico de fallos, está en
 [`docs/MANUAL.md`](docs/MANUAL.md).
 
+## Hacerlo a mano, en la consola
+
+El mismo módulo está escrito pantalla por pantalla, para construirlo desde la consola de
+Oracle Cloud sin Terraform: [`docs/MANUAL-CONSOLA.md`](docs/MANUAL-CONSOLA.md) ·
+[versión web](https://jesmonsa.github.io/oci-workshop-labs/manuales/01-elasticidad.html) ·
+[PDF](https://jesmonsa.github.io/oci-workshop-labs/pdf/Manual-Consola-01-Elasticidad.pdf)
+
 ## Qué se simplificó, y por qué
 
 Un laboratorio que no dice en qué se apartó de una arquitectura real enseña mal.

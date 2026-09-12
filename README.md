@@ -6,6 +6,16 @@ despliega en un clic, se destruye con un comando, y termina con **un entregable 
 
 **→ [Sitio con la guía completa](https://jesmonsa.github.io/oci-workshop-labs/)**
 
+## Dos caminos para el mismo laboratorio
+
+El código es para repetir; la consola es para entender. Cada módulo se despliega con
+Terraform en un clic **y** está escrito pantalla por pantalla para construirlo a mano
+desde la consola de Oracle Cloud, con los valores exactos de cada campo, las validaciones
+de cierre y los errores reales que aparecieron al armarlo, con su causa y su arreglo.
+
+**→ [Los seis manuales de consola](https://jesmonsa.github.io/oci-workshop-labs/manuales.html)**
+— unas 200 páginas en total, también descargables en PDF.
+
 ---
 
 ## Los módulos

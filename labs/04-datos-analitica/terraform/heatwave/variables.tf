@@ -29,7 +29,10 @@ variable "ad_index" {
 variable "ips_admin_cidr" {
   description = <<-EOT
     IPs desde las que se permite abrir sesiones de bastión.
-    en la preparación en la sala será otra: actualizar y aplicar (el cambio es en caliente).
+
+    En el tenancy de demostración está en 0.0.0.0/0 para que el túnel funcione
+    desde cualquier sala. La base sigue sin endpoint público: se llega por el
+    bastión, que exige credenciales de OCI y la llave de la sesión.
   EOT
   type        = list(string)
 }

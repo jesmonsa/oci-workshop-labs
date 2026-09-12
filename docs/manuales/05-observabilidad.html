@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de consola — Observabilidad y confiabilidad del servicio</title>
+<link rel="stylesheet" href="../estilos.css">
+</head><body>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../manuales.html" class="activo">Manuales</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+<link rel="stylesheet" href="../manuales.css">
+<header class="principal"><div class="envoltura">
+<span class="etiqueta">Manual de consola</span>
+<h1>Manual de consola — Observabilidad y confiabilidad del servicio</h1>
+<p class="entradilla">Alarmas con umbral, destinatario y acción escrita sobre un servicio que ya está corriendo</p>
+<div class="ficha" style="margin-top:22px"><div><b>Módulo</b>05</div><div><b>Duración</b>60–75 minutos la primera pasada, más el ciclo de prueba de la alarma</div><div><b>Costo</b>prácticamente 0 USD en observabilidad; lo único que cobra por volumen son los registros. El laboratorio observado midió 0,13 USD de cómputo en el ensayo completo</div></div>
+<a class="descarga" href="../pdf/Manual-Consola-05-Observabilidad.pdf">Descargar en PDF</a>
+</div></header>
+<main><div class="envoltura">
+<div class="indice"><p>Contenido</p><ol><li><a href="#1-qu-se-construye-y-para-qu">1. Qué se construye y para qué</a></li><li><a href="#2-equivalencias-con-otras-nubes">2. Equivalencias con otras nubes</a></li><li><a href="#3-prerrequisitos">3. Prerrequisitos</a></li><li><a href="#4-el-tema-de-notificaciones">4. El tema de notificaciones</a></li><li><a href="#5-la-suscripci-n-de-correo-y-el-clic-que-no-se-puede-saltar">5. La suscripción de correo, y el clic que no se puede saltar</a></li><li><a href="#6-la-m-trica-antes-de-la-alarma-el-explorador-y-su-lenguaje-">6. La métrica antes de la alarma: el explorador y su lenguaje de consulta</a></li><li><a href="#7-la-alarma-de-saturaci-n-de-cpu">7. La alarma de saturación de CPU</a></li><li><a href="#8-la-alarma-de-backends-no-saludables">8. La alarma de backends no saludables</a></li><li><a href="#9-umbral-ventana-y-retardo-ajustar-sin-fabricar-ruido">9. Umbral, ventana y retardo: ajustar sin fabricar ruido</a></li><li><a href="#10-el-tablero-ver-varias-se-ales-juntas">10. El tablero: ver varias señales juntas</a></li><li><a href="#11-los-registros-logs-de-servicio-y-flow-logs">11. Los registros: logs de servicio y flow logs</a></li><li><a href="#12-consultar-los-registros">12. Consultar los registros</a></li><li><a href="#13-la-matriz-qu-despierta-a-alguien-y-qu-no">13. La matriz: qué despierta a alguien y qué no</a></li><li><a href="#14-validaci-n-de-extremo-a-extremo">14. Validación de extremo a extremo</a></li><li><a href="#15-qu-puede-salir-mal">15. Qué puede salir mal</a></li><li><a href="#16-limpieza">16. Limpieza</a></li><li><a href="#17-documentaci-n-oficial">17. Documentación oficial</a></li><li><a href="#anexo-qu-falta-para-que-esto-sea-un-modelo-completo">Anexo · Qué falta para que esto sea un modelo completo</a></li></ol></div>
+<p>Este manual se hace <b>desde la consola de OCI</b>, haciendo clic. No usa Terraform y usa la CLI solo para verificar lo que la consola ya mostró. Está escrito para alguien que administra infraestructura, conoce AWS o Azure y nunca ha entrado a OCI.</p>
+<hr/>
+<h2 id="1-qu-se-construye-y-para-qu">1. Qué se construye y para qué</h2>
+<p>Este laboratorio <b>no crea infraestructura</b>. Se monta encima de un servicio que ya está corriendo: un balanceador con un grupo de instancias detrás, con autoescalamiento configurado. Lo que se construye es la capa que convierte una métrica en una alarma con dueño.</p>
+<p>La diferencia importa. Una métrica es un número. Una alarma es un número, un umbral, un destinatario y una acción escrita. Sin esas cuatro cosas hay una gráfica bonita y un teléfono que suena de madrugada sin que nadie sepa qué hacer.</p>
+<p>Al terminar, tres piezas quedan funcionando:</p>
+<ol><li>Un <b>tema de notificaciones</b> con una suscripción de correo confirmada.</li><li>Dos <b>alarmas de métrica</b> con umbral, ventana y severidad distintas, que escriben en ese tema.</li><li>Los <b>registros de servicio</b> (logs) habilitados y consultables, para bajar del síntoma al detalle cuando la alarma no se explica sola.</li></ol>
+<pre><code>        ┌──────────────────────────────────────────────────────┐
+        │  Servicio observado (ya existe, no se toca)           │
+        │                                                      │
+        │   balanceador  ──►  grupo de instancias  ──►  app     │
+        │        │                    │                        │
+        └────────┼────────────────────┼────────────────────────┘
+                 │ oci_lbaas          │ oci_computeagent
+                 ▼                    ▼
+        ┌──────────────────────────────────────────────────────┐
+        │  Monitoring · métricas de plataforma                  │
+        └──────────┬─────────────────────────┬─────────────────┘
+                   │                         │
+     UnHealthyBackendServers            CpuUtilization
+     [1m].max() &gt; 0   · 2 min           [1m].mean() &gt; 45 · 3 min
+                   │                         │
+                   ▼                         ▼
+        ┌──────────────────────────────────────────────────────┐
+        │  Alarmas                                              │
+        │    lab05-backends-no-saludables   CRITICAL            │
+        │    lab05-saturacion-cpu           WARNING             │
+        └───────────────────────┬──────────────────────────────┘
+                                ▼
+        ┌──────────────────────────────────────────────────────┐
+        │  Notifications · tema lab05-alarmas-operacion         │
+        │  suscripción de correo   ← PENDING hasta el clic      │
+        └───────────────────────┬──────────────────────────────┘
+                                ▼
+                  correo con el ENLACE AL RUNBOOK dentro</code></pre>
+<h3 id="la-decisi-n-que-este-laboratorio-ayuda-a-tomar">La decisión que este laboratorio ayuda a tomar</h3>
+<p>No es «qué herramienta de monitoreo compramos». Es esta:</p>
+<blockquote><b>¿Qué merece despertar a alguien de madrugada y qué puede esperar al día siguiente?</b></blockquote>
+<p>Todo el laboratorio está construido para hacer visible esa pregunta con un caso concreto. La demostración central es un ciclo completo que se midió de punta a punta:</p>
+<div class="tablacaja"><table><thead><tr><th>Momento</th><th>Estado de la alarma</th></tr></thead><tbody><tr><td>En reposo</td><td><code>OK</code></td></tr><tr><td>Con carga: CPU en 62 % contra un umbral de 45 %</td><td><b><code>FIRING</code></b></td></tr><tr><td>Después, sin que nadie intervenga</td><td><b><code>OK</code> — se cerró sola</b></td></tr></tbody></table></div>
+<p>La alarma sonó, el autoescalamiento agregó capacidad, la CPU por instancia bajó y la alarma se cerró <b>sin que nadie hiciera nada</b>. Esa secuencia es el argumento del laboratorio: una alarma que se resuelve sola no debía despertar a nadie, pero tampoco debía desaparecer sin dejar rastro. Distinguir lo que se atiende <i>ahora</i> de lo que hay que <i>saber</i> es lo que separa a un equipo que apaga incendios de uno que opera.</p>
+<p>El entregable no es la alarma: es la <b>matriz de señales</b> del capítulo 13.</p>
+<hr/>
+<h2 id="2-equivalencias-con-otras-nubes">2. Equivalencias con otras nubes</h2>
+<p>Solo los servicios que aparecen en este manual.</p>
+<div class="tablacaja"><table><thead><tr><th>Para qué</th><th>AWS</th><th>Azure</th><th>OCI</th></tr></thead><tbody><tr><td>Métricas de plataforma</td><td>CloudWatch Metrics</td><td>Azure Monitor Metrics</td><td>Monitoring</td></tr><tr><td>Explorar una métrica</td><td>CloudWatch Metrics console</td><td>Metrics Explorer</td><td>Metrics Explorer / Service Metrics</td></tr><tr><td>Lenguaje de consulta de métricas</td><td>Metric Math</td><td>Consultas de Azure Monitor</td><td>MQL (Monitoring Query Language)</td></tr><tr><td>Alarma sobre una métrica</td><td>CloudWatch Alarm</td><td>Alert rule (metric)</td><td>Alarm definition</td></tr><tr><td>Ventana antes de disparar</td><td>Evaluation periods × period</td><td>Aggregation granularity + Frequency</td><td>Interval + Trigger delay minutes</td></tr><tr><td>A quién le llega</td><td>SNS topic + subscription</td><td>Action group</td><td>Notifications: topic + subscription</td></tr><tr><td>Confirmación del correo</td><td>SNS pide confirmar por correo</td><td>El grupo de acción no siempre la pide</td><td><b>Siempre</b> la pide: PENDING → ACTIVE</td></tr><tr><td>Tableros</td><td>CloudWatch Dashboards</td><td>Azure Dashboards / Workbooks</td><td>Dashboards</td></tr><tr><td>Registros de servicio</td><td>CloudWatch Logs</td><td>Diagnostic settings → Log Analytics</td><td>Logging (service logs)</td></tr><tr><td>Registros de red</td><td>VPC Flow Logs</td><td>NSG flow logs</td><td>Flow Logs (a través de Logging)</td></tr><tr><td>Consultar registros</td><td>CloudWatch Logs Insights</td><td>Log Analytics (KQL)</td><td>Logging Search</td></tr><tr><td>Eventos de la nube</td><td>EventBridge</td><td>Event Grid</td><td>Events Service</td></tr><tr><td>Registro de auditoría</td><td>CloudTrail</td><td>Activity Log</td><td>Audit (automático, sin habilitar nada)</td></tr></tbody></table></div>
+<p>Tres diferencias que cuestan tiempo si se llega con el modelo mental de otra nube:</p>
+<ul><li><b>La alarma y el recurso observado pueden vivir en compartimentos distintos</b>, y en la práctica conviene que así sea. En la pantalla de creación de la alarma hay <b>dos</b> campos de compartimento y no significan lo mismo. Es el error de configuración más frecuente de este laboratorio.</li><li><b>El compartimento no es un grupo de recursos de Azure ni una cuenta de AWS.</b> Es un contenedor lógico con jerarquía y políticas propias, dentro de un solo tenancy.</li><li><b>Audit está siempre encendido.</b> No hay que habilitar un «trail». Los registros de red y de servicio sí hay que habilitarlos uno por uno, y por eso tienen su propio capítulo.</li></ul>
+<hr/>
+<h2 id="3-prerrequisitos">3. Prerrequisitos</h2>
+<h3 id="3-1-lo-que-debe-existir-antes-de-empezar">3.1 Lo que debe existir antes de empezar</h3>
+<div class="tablacaja"><table><thead><tr><th>Requisito</th><th>Detalle</th></tr></thead><tbody><tr><td>Un servicio corriendo con métricas</td><td>Un balanceador con un grupo de instancias detrás. Este manual observa ese servicio; no lo crea</td></tr><tr><td>Dos compartimentos</td><td>Uno para la observabilidad (<code>lab-05-observabilidad</code>) y el del servicio observado</td></tr><tr><td>El plugin de monitoreo activo</td><td>En las instancias del grupo. Sin él, el espacio de nombres <code>oci_computeagent</code> no publica nada</td></tr><tr><td>Una dirección de correo a la que pueda entrar</td><td>Va a tener que abrirla y hacer clic en un enlace</td></tr><tr><td>Permisos de la consola</td><td>Ver abajo</td></tr></tbody></table></div>
+<p>Los dos compartimentos podrían ser el mismo, pero se separan a propósito: la operación mira todo desde un solo lugar aunque los recursos vivan repartidos. Ese es el modelo que sirve cuando hay más de un ambiente.</p>
+<h3 id="3-2-permisos">3.2 Permisos</h3>
+<p>Si usted es administrador del tenancy, puede saltarse esta sección. Si no, el grupo al que pertenece necesita al menos estas sentencias, expresadas en el lenguaje de políticas de OCI:</p>
+<pre><code>Allow group Operacion to manage alarms in compartment lab-05-observabilidad
+Allow group Operacion to manage ons-topics in compartment lab-05-observabilidad
+Allow group Operacion to read metrics in compartment lab-laboratorio
+Allow group Operacion to manage log-groups in compartment lab-05-observabilidad
+Allow group Operacion to manage log-content in compartment lab-05-observabilidad
+Allow group Operacion to read instance-family in compartment lab-laboratorio
+Allow group Operacion to read load-balancers in compartment lab-laboratorio</code></pre>
+<p>Dos detalles fáciles de pasar por alto:</p>
+<ul><li><code>read metrics</code> va sobre el compartimento <b>del servicio observado</b>, no sobre el de las alarmas. Sin ese permiso la pantalla de creación de la alarma se ve completa pero el desplegable de métricas aparece vacío.</li><li><code>manage ons-topics</code> es necesario para que la alarma pueda escribir en el tema.</li></ul>
+<p class="consola"><span>Consola de OCI</span>Identity &amp; Security › Policies</p>
+<h3 id="3-3-verificar-el-plugin-de-monitoreo">3.3 Verificar el plugin de monitoreo</h3>
+<p>Las métricas de CPU del espacio de nombres <code>oci_computeagent</code> las publica un plugin del agente que corre dentro de cada instancia. Si está deshabilitado, no hay métrica; si no hay métrica, la alarma se crea igual y nunca suena.</p>
+<p class="consola"><span>Consola de OCI</span>Compute › Instances › (una instancia del grupo) › Oracle Cloud Agent</p>
+<ol><li>Abra una de las instancias que están detrás del balanceador.</li><li>Entre a la pestaña del agente de Oracle Cloud.</li><li>Confirme que el plugin de monitoreo de la instancia de cómputo está habilitado.</li><li>Repita en una segunda instancia. Si el grupo crece por autoescalamiento, las instancias nuevas heredan la configuración de la plantilla del grupo: si la plantilla lo tiene apagado, las nuevas nacen ciegas.</li></ol>
+<p><b>Una alarma sobre una métrica que no existe se crea sin ningún error.</b> La consola acepta cualquier nombre de métrica. Si el nombre está mal escrito, si el espacio de nombres no es el correcto o si el plugin está apagado, la alarma queda creada, se ve perfecta en la lista y nunca dispara.</p>
+<p>Es la peor forma de fallar, porque parece que funciona. Por eso el capítulo 6 explora la métrica en el gráfico <b>antes</b> de crear la alarma: si el número no se ve dibujado en pantalla, la alarma no va a servir.</p>
+<h3 id="3-4-cuotas-y-l-mites-en-una-cuenta-de-prueba">3.4 Cuotas y límites en una cuenta de prueba</h3>
+<div class="tablacaja"><table><thead><tr><th>Servicio</th><th>Qué esperar</th></tr></thead><tbody><tr><td>Monitoring</td><td>Sin costo relevante. Las alarmas no cobran por existir</td></tr><tr><td>Notifications</td><td>Cuota mensual de envíos de correo holgada para un laboratorio. [VALIDAR] la cifra vigente en la página de precios</td></tr><tr><td>Logging</td><td><b>Cobra por lo que ingiere y almacena.</b> Es lo único de este manual con costo por volumen</td></tr><tr><td>Dashboards</td><td>Sin costo</td></tr></tbody></table></div>
+<p>El ensayo completo del laboratorio midió <b>0,13 USD</b> de cómputo en total, y la capa de observabilidad no movió esa cifra de forma apreciable.</p>
+<h3 id="3-5-una-advertencia-sobre-el-ambiente-observado">3.5 Una advertencia sobre el ambiente observado</h3>
+<p>El servicio que se observa tiene el puerto 22 y el bastión abiertos a <code>0.0.0.0/0</code>. <b>Está así a propósito, por ser un ambiente desechable</b> que se destruye al final del día y no tiene datos. No es una recomendación.</p>
+<p>En un ambiente con datos, el acceso administrativo se restringe a los bloques CIDR concretos desde los que se administra, el bastión lleva su propia lista de clientes permitidos y el puerto 22 no se expone a internet en ninguna subred. Lo señalamos aquí porque más adelante, en los registros de red, ese <code>0.0.0.0/0</code> va a aparecer en forma de tráfico que nadie esperaba.</p>
+<hr/>
+<h2 id="4-el-tema-de-notificaciones">4. El tema de notificaciones</h2>
+<p>El tema es el buzón al que las alarmas escriben. Las alarmas no envían correos: publican en un tema, y el tema reparte a sus suscriptores. Esa indirección es la que permite cambiar destinatarios sin tocar ninguna alarma.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Notifications › Topics › Create Topic</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Name</td><td><code>lab05-alarmas-operacion</code></td></tr><tr><td>Description</td><td><code>Alarmas de plataforma del laboratorio de observabilidad</code></td></tr><tr><td>Compartment</td><td>el compartimento de observabilidad</td></tr></tbody></table></div>
+<ol><li>Abra el menú de navegación de la consola. Si no encuentra <b>Notifications</b> en el menú, escríbalo en la barra de búsqueda de la consola: en algunas versiones el servicio aparece además bajo la categoría de integración de aplicaciones. Es el mismo servicio.</li><li>Verifique en el selector de compartimento de la izquierda que está parado en el compartimento de observabilidad. Todo lo que cree a continuación nace ahí.</li><li>Presione <b>Create Topic</b>.</li><li>En <b>Name</b>, escriba <code>lab05-alarmas-operacion</code>. El nombre admite letras, números, guiones y guiones bajos; no admite espacios.</li><li>En <b>Description</b>, escriba una línea que diga de quién son estas alarmas. En seis meses, con cuatro temas creados, la descripción es lo único que los distingue.</li><li>Agregue etiquetas de forma libre. Para un laboratorio son útiles tres:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Etiqueta</th><th>Valor</th></tr></thead><tbody><tr><td><code>Proyecto</code></td><td><code>LaboratorioObservabilidad</code></td></tr><tr><td><code>Owner</code></td><td>quien lo creó</td></tr><tr><td><code>Efimero</code></td><td><code>si</code></td></tr></tbody></table></div>
+<p>La tercera es la que permite encontrar y borrar después todo lo que era desechable. Un recurso sin etiqueta de dueño sobrevive a todas las limpiezas.</p>
+<ol><li>Presione <b>Create</b>. El tema aparece en la lista en estado activo, con su OCID visible en la página de detalle: algo de la forma <code>ocid1.onstopic.oc1..aaaaEJEMPLO</code>.</li></ol>
+<p><b>Un tema por audiencia, no por alarma.</b> La tentación es crear un tema por alarma. Termina en veinte temas y nadie sabe quién está suscrito a qué.</p>
+<p>El criterio útil es la audiencia: un tema para lo que atiende el turno de operación, otro para lo que va a seguridad, otro para lo que le interesa a quien mira el presupuesto. Las alarmas cambian; las audiencias, casi nunca.</p>
+<hr/>
+<h2 id="5-la-suscripci-n-de-correo-y-el-clic-que-no-se-puede-saltar">5. La suscripción de correo, y el clic que no se puede saltar</h2>
+<p>Este capítulo tiene un solo paso que importa, y es el que más veces se salta.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Notifications › Topics › lab05-alarmas-operacion › Create Subscription</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Protocol</td><td>Email</td></tr><tr><td>Email</td><td>la dirección que va a recibir las alarmas</td></tr></tbody></table></div>
+<ol><li>Entre al tema que acaba de crear.</li><li>En el panel de recursos de la izquierda, seleccione la lista de suscripciones.</li><li>Presione <b>Create Subscription</b>.</li><li>En <b>Protocol</b>, elija el protocolo de correo electrónico. El desplegable trae también mensajería, funciones y llamadas HTTPS; para este laboratorio es correo.</li><li>Escriba la dirección de destino. Por ejemplo, <code>operacion@ejemplo.com</code>.</li><li>Presione <b>Create</b>.</li><li>Mire la columna de estado en la lista de suscripciones. Dice <b>Pending</b>.</li></ol>
+<h3 id="el-estado-que-decide-si-todo-esto-sirve">El estado que decide si todo esto sirve</h3>
+<div class="caja c-importante"><p class="cajatit">IMPORTANTE · La suscripción queda en PENDING hasta que alguien hace clic</p><p>Al crear la suscripción, OCI envía un correo de confirmación con un enlace. <b>Hasta que alguien abre ese correo y hace clic, la suscripción sigue en <code>PENDING</code> y no recibe absolutamente nada.</b></p><p>Y aquí está la trampa: la alarma dispara igual. En la consola se ve todo perfecto —la alarma existe, está habilitada, pasa a <code>FIRING</code>, el tema tiene su suscripción— y la bandeja de entrada sigue vacía. No hay ningún mensaje de error en ninguna pantalla que le diga que le falta el clic.</p><p>Es la forma más común de montar una observabilidad que parece funcionar y no funciona. Si de este manual solo se acuerda de una cosa, que sea esta.</p></div>
+<ol><li>Abra el correo. El remitente es el servicio de notificaciones de Oracle Cloud y el cuerpo trae un enlace de confirmación.</li><li>Haga clic en el enlace. Se abre una página que confirma la suscripción.</li><li>Vuelva a la consola y refresque la lista. El estado debe decir <b>Active</b>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Estado</th><th>Qué significa</th></tr></thead><tbody><tr><td><code>PENDING</code></td><td><b>No va a llegar nada.</b> Falta el clic</td></tr><tr><td><code>ACTIVE</code></td><td>Listo. Las alarmas de este tema llegan a ese correo</td></tr></tbody></table></div>
+<ol><li>Si el correo no aparece en unos minutos, revise la carpeta de no deseados. Los filtros corporativos son especialmente aficionados a los correos con enlaces de confirmación.</li><li>Si aun así no llega, el menú de acciones de la suscripción permite reenviar la confirmación. Úselo antes de borrar y volver a crear: una suscripción borrada y recreada genera otro correo idéntico, y termina con dos pendientes.</li></ol>
+<h3 id="verificaci-n-por-cli">Verificación por CLI</h3>
+<p>La consola ya lo dice, pero este es el comando que conviene dejar anotado, porque es el que se corre sin abrir el navegador antes de una jornada importante:</p>
+<pre><code>COMP07="ocid1.compartment.oc1..aaaaEJEMPLO"
+
+oci ons subscription list --compartment-id "$COMP07" \
+  --query 'data[].{correo:endpoint,estado:"lifecycle-state"}' --output table</code></pre>
+<p>En el ensayo de este laboratorio, esta verificación fue el único punto pendiente de toda la preparación, y se resolvió confirmando la suscripción el mismo día en que se creó. La regla que salió de ahí: <b>crear la suscripción y confirmarla son el mismo paso</b>, no dos.</p>
+<h3 id="una-prueba-de-30-segundos-que-ahorra-una-madrugada">Una prueba de 30 segundos que ahorra una madrugada</h3>
+<ol><li>En la página del tema, use la acción de publicar un mensaje de prueba.</li><li>Escriba cualquier texto en el cuerpo y envíelo.</li><li>El correo debe llegar en menos de un minuto.</li></ol>
+<p>Si llega, la cadena tema → suscripción → bandeja de entrada está probada y ya no va a ser la causa de que una alarma no se vea. Si no llega, el problema está aquí y no en la alarma que todavía no ha creado. Probar la cadena por partes, en orden, es lo que evita diagnosticar tres cosas a la vez.</p>
+<hr/>
+<h2 id="6-la-m-trica-antes-de-la-alarma-el-explorador-y-su-lenguaje-">6. La métrica antes de la alarma: el explorador y su lenguaje de consulta</h2>
+<p>Antes de crear la alarma hay que ver la métrica dibujada. Este capítulo no crea nada: prepara la consulta que el siguiente capítulo va a usar.</p>
+<h3 id="6-1-ver-la-m-trica">6.1 Ver la métrica</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Metrics Explorer</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td>el compartimento <b>del servicio observado</b></td></tr><tr><td>Metric namespace</td><td><code>oci_computeagent</code></td></tr><tr><td>Metric name</td><td><code>CpuUtilization</code></td></tr><tr><td>Interval</td><td><code>1m</code></td></tr><tr><td>Statistic</td><td><code>Mean</code></td></tr></tbody></table></div>
+<ol><li>Abra el explorador de métricas.</li><li>En <b>Compartment</b>, seleccione el compartimento donde viven las instancias. No el de observabilidad. Si se equivoca aquí, el desplegable de métricas aparece vacío y parece un problema de permisos.</li><li>En <b>Metric namespace</b>, elija <code>oci_computeagent</code>. Los espacios de nombres son la forma en que OCI separa las métricas por servicio: <code>oci_computeagent</code> para lo que publica el agente dentro de la instancia, <code>oci_lbaas</code> para el balanceador, <code>oci_vcn</code> para la red, y así.</li><li>En <b>Metric name</b>, elija <code>CpuUtilization</code>.</li><li>Deje <b>Interval</b> en <code>1m</code> y <b>Statistic</b> en el promedio.</li><li>Actualice el gráfico.</li><li><b>Debe ver una línea con datos.</b> Si el gráfico está vacío:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Lo que ve</th><th>Qué revisar</th></tr></thead><tbody><tr><td>Gráfico vacío</td><td>El compartimento del paso 2</td></tr><tr><td>Gráfico vacío y el compartimento es el correcto</td><td>El plugin de monitoreo (sección 3.3)</td></tr><tr><td>El servicio se levantó hace poco</td><td>Espere 10 minutos. Las métricas tardan en publicarse</td></tr></tbody></table></div>
+<ol><li>Fíjese en que hay <b>varias líneas</b>, una por instancia. Cada combinación de dimensiones es una serie distinta. Esto va a importar en el capítulo 9.</li></ol>
+<h3 id="6-2-c-mo-se-arma-la-expresi-n">6.2 Cómo se arma la expresión</h3>
+<p>La consola tiene dos formas de decir lo mismo. En el modo básico usted llena campos; al activar el modo avanzado, la consola le muestra la consulta que esos campos producen, escrita en MQL, el lenguaje de consulta de métricas de OCI.</p>
+<p>Vale la pena mirarla una vez, porque es la que va a leer cuando algo no dispare:</p>
+<pre><code>  CpuUtilization  [1m]   .mean()       &gt;       45
+  ───────┬──────  ──┬──  ───┬───       ┬       ─┬
+         │          │       │          │        │
+         │          │       │          │        └─ valor del umbral
+         │          │       │          └────────── operador del disparador
+         │          │       └───────────────────── estadística
+         │          └───────────────────────────── intervalo (la ventana)
+         └──────────────────────────────────────── nombre de la métrica</code></pre>
+<p>Y la equivalencia con los campos de la consola:</p>
+<div class="tablacaja"><table><thead><tr><th>Pieza de la consulta</th><th>Campo en la consola</th><th>Qué decide</th></tr></thead><tbody><tr><td><code>CpuUtilization</code></td><td>Metric name</td><td><b>Qué</b> se mide</td></tr><tr><td><code>[1m]</code></td><td>Interval</td><td>Sobre <b>cuánto tiempo</b> se agrupan los datos crudos</td></tr><tr><td><code>.mean()</code></td><td>Statistic</td><td><b>Cómo</b> se resumen los puntos de esa ventana</td></tr><tr><td><code>&gt; 45</code></td><td>Operator + Value</td><td><b>Cuándo</b> se considera que la condición se cumple</td></tr><tr><td>—</td><td>Trigger delay minutes</td><td><b>Cuánto tiempo</b> debe cumplirse antes de sonar</td></tr></tbody></table></div>
+<h3 id="6-3-el-intervalo">6.3 El intervalo</h3>
+<p>El intervalo es la ventana sobre la que se agrupan los datos crudos antes de aplicar la estadística. Con <code>[1m]</code>, cada punto de la serie resume un minuto de mediciones.</p>
+<div class="tablacaja"><table><thead><tr><th>Intervalo</th><th>Cuándo conviene</th></tr></thead><tbody><tr><td><code>1m</code></td><td>Señales que hay que ver rápido: CPU, salud de backends, errores</td></tr><tr><td><code>5m</code></td><td>Señales ruidosas por naturaleza, donde el minuto suelto miente</td></tr><tr><td><code>1h</code></td><td>Tendencias: capacidad, almacenamiento, consumo</td></tr></tbody></table></div>
+<p>Un intervalo más corto no es «mejor»: es más sensible. Y más sensible, en una señal ruidosa, significa más correos que nadie va a leer.</p>
+<p>Hay un piso que no se puede bajar: el intervalo no puede ser más fino que la frecuencia con la que el servicio publica la métrica. Pedir <code>[10s]</code> sobre una métrica que se publica cada minuto no da más resolución; da huecos.</p>
+<h3 id="6-4-la-estad-stica">6.4 La estadística</h3>
+<p>La estadística resuelve los puntos de la ventana en un solo número. La elección cambia por completo lo que la alarma significa.</p>
+<div class="tablacaja"><table><thead><tr><th>Estadística</th><th>Qué responde</th><th>Ejemplo de uso</th></tr></thead><tbody><tr><td><code>mean()</code></td><td>¿Cómo estuvo en promedio?</td><td>CPU sostenida</td></tr><tr><td><code>max()</code></td><td>¿Llegó a pasar aunque fuera una vez?</td><td>Backends caídos, errores</td></tr><tr><td><code>min()</code></td><td>¿Estuvo siempre por encima de…?</td><td>Verificaciones de disponibilidad</td></tr><tr><td><code>sum()</code></td><td>¿Cuánto en total?</td><td>Peticiones, bytes</td></tr><tr><td><code>count()</code></td><td>¿Cuántos puntos hubo?</td><td>Detectar métricas que dejan de publicarse</td></tr><tr><td><code>rate()</code></td><td>¿Qué tan rápido cambia?</td><td>Crecimiento de una cola</td></tr><tr><td><code>percentile()</code></td><td>¿Cómo le fue al peor tramo?</td><td>Latencia p95, p99</td></tr></tbody></table></div>
+<p>La regla práctica, y es la que se aplica en las dos alarmas de este manual:</p>
+<ul><li>Para <b>causas</b> —CPU, memoria, disco— se usa <code>mean()</code>. Un pico de un minuto no es un problema; un promedio sostenido sí.</li><li>Para <b>síntomas</b> —backends caídos, errores— se usa <code>max()</code>. Si pasó una sola vez, ya pasó, y el usuario ya lo sintió.</li></ul>
+<p><b>La latencia promedio esconde justamente lo que hay que ver.</b> Un promedio de 200 ms puede ser un servicio impecable o uno donde el 5 % de los usuarios espera 8 segundos. El promedio no los distingue; el percentil 95 sí.</p>
+<p>Para cualquier señal de experiencia de usuario —latencia, tiempo de respuesta, tiempo de proceso— la estadística por defecto debería ser un percentil alto y no el promedio. Es el cambio de una sola casilla que más mejora un modelo de observabilidad heredado.</p>
+<h3 id="6-5-dimensiones-y-agrupaci-n">6.5 Dimensiones y agrupación</h3>
+<p>Una métrica no es una línea: es un conjunto de líneas, una por combinación de dimensiones. <code>CpuUtilization</code> trae, entre otras, el identificador del recurso y su nombre visible.</p>
+<p>En la consulta, las dimensiones se filtran entre llaves:</p>
+<pre><code>CpuUtilization[1m]{resourceDisplayName = "lab01-app"}.mean() &gt; 45</code></pre>
+<p>Y hay una decisión de fondo, que es la que explica por qué la alarma de este laboratorio se cierra sola:</p>
+<ul><li><b>Sin agrupar</b> (lo que hace este manual), la alarma evalúa la condición <b>por cada instancia</b>. Si una instancia pasa del umbral, la alarma dispara.</li><li><b>Agrupando</b> con <code>.grouping()</code>, todas las series se colapsan en una sola y la condición se evalúa sobre el conjunto.</li></ul>
+<p>Como aquí se evalúa por instancia y el promedio de CPU <b>por instancia</b> baja cuando el grupo crece, el autoescalamiento apaga la alarma sin que nadie intervenga. Si se agrupara por suma, el total no bajaría al crecer el grupo y la alarma no se cerraría nunca. La misma métrica, el mismo umbral, y un comportamiento opuesto.</p>
+<h3 id="6-6-la-funci-n-que-detecta-la-ceguera">6.6 La función que detecta la ceguera</h3>
+<p>MQL tiene una función que casi nadie usa y que resuelve el estado más peligroso de todos:</p>
+<pre><code>CpuUtilization[5m].absent()</code></pre>
+<p>Dispara cuando la métrica <b>deja de llegar</b>. Es la alarma sobre la alarma: avisa de que el plugin se apagó, de que la instancia desapareció o de que alguien cambió el nombre de algo.</p>
+<p>No la vamos a crear en este laboratorio, pero conviene saber que existe, porque el capítulo 14 muestra por qué hace falta: una alarma sin datos se ve exactamente igual que una alarma tranquila.</p>
+<hr/>
+<h2 id="7-la-alarma-de-saturaci-n-de-cpu">7. La alarma de saturación de CPU</h2>
+<p>Primera alarma. Es una <b>causa</b>: avisa de que algo puede estar por degradarse, no de que el usuario ya lo esté sintiendo. Por eso su severidad es <code>WARNING</code>.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Definitions › Create Alarm</p>
+<h3 id="7-1-definici-n-de-la-alarma">7.1 Definición de la alarma</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Alarm name</td><td><code>lab05-saturacion-cpu</code></td></tr><tr><td>Alarm severity</td><td>Warning</td></tr><tr><td>Compartment (de la alarma)</td><td>el compartimento de observabilidad</td></tr></tbody></table></div>
+<ol><li>Entre a las definiciones de alarma y presione <b>Create Alarm</b>.</li><li>En <b>Alarm name</b>, escriba <code>lab05-saturacion-cpu</code>. El nombre viaja en el asunto del correo: si no se entiende en el asunto, no se entiende a las tres de la mañana.</li><li>En <b>Alarm severity</b>, elija <b>Warning</b>.</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Severidad</th><th>Cuándo</th></tr></thead><tbody><tr><td>Critical</td><td>El usuario lo está sintiendo ahora</td></tr><tr><td>Error</td><td>Algo falló y hay que mirarlo hoy</td></tr><tr><td>Warning</td><td>Degradación probable, no caída</td></tr><tr><td>Info</td><td>Para registro, no para actuar</td></tr></tbody></table></div>
+<ol><li>Confirme que el compartimento de la alarma es el de observabilidad.</li></ol>
+<h3 id="7-2-descripci-n-de-la-m-trica-los-dos-compartimentos">7.2 Descripción de la métrica — los dos compartimentos</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td>el compartimento <b>del servicio observado</b></td></tr><tr><td>Metric namespace</td><td><code>oci_computeagent</code></td></tr><tr><td>Metric name</td><td><code>CpuUtilization</code></td></tr><tr><td>Interval</td><td><code>1m</code></td></tr><tr><td>Statistic</td><td><code>Mean</code></td></tr></tbody></table></div>
+<ol><li>Baje a la sección donde se describe la métrica.</li><li><b>Cambie el compartimento</b> al del servicio observado. Este campo viene precargado con el compartimento de la alarma y ahí está la trampa.</li></ol>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · En esta pantalla hay dos compartimentos y no significan lo mismo</p><p>El primero —arriba, junto al nombre— dice <b>dónde vive la alarma</b>. El segundo —en la descripción de la métrica— dice <b>dónde están los recursos que se vigilan</b>.</p><p>Si los deja iguales por inercia, la alarma queda buscando métricas en el compartimento de observabilidad, donde no hay ninguna instancia. Resultado: una alarma que nunca dispara, sin ningún mensaje de error, y que en la lista se ve idéntica a una que está bien.</p><p>Ese es exactamente el estado «sin datos» del capítulo 14, y es el motivo por el cual la validación de este manual no termina cuando la alarma aparece creada.</p></div>
+<ol><li>Elija el espacio de nombres <code>oci_computeagent</code> y la métrica <code>CpuUtilization</code>. Si el desplegable aparece vacío, vuelva al paso 6: casi siempre es el compartimento.</li><li>Deje <b>Interval</b> en <code>1m</code> y <b>Statistic</b> en el promedio.</li><li>No agregue dimensiones. Queremos que la alarma evalúe instancia por instancia, por la razón de la sección 6.5.</li><li>Si quiere confirmar la consulta, active el modo avanzado. Debe leerse:</li></ol>
+<pre><code>CpuUtilization[1m].mean() &gt; 45</code></pre>
+<h3 id="7-3-la-regla-del-disparador">7.3 La regla del disparador</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Operator</td><td>greater than</td></tr><tr><td>Value</td><td><code>45</code></td></tr><tr><td>Trigger delay minutes</td><td><code>3</code></td></tr></tbody></table></div>
+<ol><li>En <b>Operator</b>, elija «mayor que».</li><li>En <b>Value</b>, escriba <code>45</code>.</li></ol>
+<p>El número no es arbitrario. El servicio observado tiene autoescalamiento configurado con un umbral de <b>55 %</b>. La alarma se pone <b>por debajo</b>: en 45. Así la alarma suena primero y el autoescalamiento la apaga después. Si la alarma estuviera por encima del umbral de escalamiento, la plataforma reaccionaría antes de que la CPU llegara al umbral de la alarma y <b>la alarma no sonaría nunca</b>.</p>
+<ol><li>En el retardo del disparador, escriba <code>3</code> minutos. Es la traducción del valor ISO-8601 <code>PT3M</code>: la condición tiene que sostenerse tres minutos seguidos antes de que la alarma pase a <code>FIRING</code>.</li></ol>
+<p>Sin ese retardo, cualquier pico de treinta segundos genera un correo. En dos semanas nadie los lee, y entre esos correos que nadie lee va a estar el que sí importaba.</p>
+<h3 id="7-4-a-d-nde-llega">7.4 A dónde llega</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Destination service</td><td>Notifications</td></tr><tr><td>Compartment</td><td>el compartimento de observabilidad</td></tr><tr><td>Topic</td><td><code>lab05-alarmas-operacion</code></td></tr></tbody></table></div>
+<ol><li>En la sección de destino, elija el servicio de notificaciones.</li><li>Seleccione el compartimento de observabilidad y el tema <code>lab05-alarmas-operacion</code>. Si no aparece, revise que el selector de compartimento sea el correcto.</li><li>Deje el formato de mensaje en la opción de <b>mensaje formateado</b> —la que corresponde al valor <code>ONS_OPTIMIZED</code>—. Las otras opciones entregan el evento en crudo o en JSON, que sirven cuando el destino es una función o un sistema de tiquetes, no un ser humano.</li></ol>
+<h3 id="7-5-el-cuerpo-del-mensaje-el-paso-que-de-verdad-baja-el-tiem">7.5 El cuerpo del mensaje — el paso que de verdad baja el tiempo de recuperación</h3>
+<ol><li>En el cuerpo de la alarma, escriba un texto que sirva a alguien con sueño:</li></ol>
+<pre><code>La CPU del servicio superó el 45 % durante 3 minutos.
+
+QUE HACER (runbook): https://&lt;su-repo&gt;/runbooks/RUNBOOK-saturacion-cpu.md
+
+Antes de escalar manualmente, verificar si el autoescalamiento ya reaccionó:
+si el grupo creció y la carga es legítima, esta alarma se cierra sola y NO
+requiere acción — solo queda registrada para la revisión semanal.</code></pre>
+<p>Tres cosas, y ninguna es decorativa:</p>
+<ul><li><b>El enlace al runbook viaja dentro del correo.</b> Quien lo recibe de madrugada no tiene que buscar en ningún wiki. Esto es lo que baja el tiempo de recuperación: no el tablero, no la herramienta, sino que la instrucción viaje con la alarma.</li><li><b>La primera instrucción es descartar, no diagnosticar.</b> «¿La plataforma ya lo está resolviendo sola?» es la pregunta que ahorra la mitad de las madrugadas.</li><li><b>Dice explícitamente que puede no requerir acción.</b> Un runbook que solo contempla la rama «hay que hacer algo» entrena al equipo a hacer algo siempre.</li></ul>
+<p><b>El cuerpo del mensaje es el runbook de emergencia.</b> Si mañana el repositorio de runbooks no abre —porque es privado, porque cambió la ruta, porque la VPN no levanta—, lo único que queda es el texto del correo.</p>
+<p>Escríbalo pensando en eso: tres líneas que digan qué significa la alarma, qué revisar primero y a quién llamar si eso no alcanza. El enlace es el detalle; el texto es el respaldo del enlace.</p>
+<h3 id="7-6-repetici-n-y-cierre">7.6 Repetición y cierre</h3>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Repeat notification</td><td>Habilitado</td></tr><tr><td>Notification frequency</td><td>30 minutos</td></tr></tbody></table></div>
+<ol><li>Habilite la repetición de la notificación y póngale 30 minutos. Mientras la alarma siga disparada, llega un recordatorio cada media hora.</li></ol>
+<p>Más frecuente cansa y se convierte en ruido. Menos frecuente deja que algo se olvide durante un turno entero.</p>
+<ol><li>Deje habilitada la alarma.</li><li>Agregue las mismas etiquetas del tema.</li><li>Presione <b>Save alarm</b>.</li></ol>
+<p>La alarma aparece en la lista. En la página de detalle verá su OCID (<code>ocid1.alarm.oc1..aaaaEJEMPLO</code>) y un gráfico con la métrica y la línea del umbral dibujada encima. <b>Ese gráfico es la primera validación</b>: si la línea del umbral está muy por encima de todo lo que se ve, la alarma nunca va a sonar; si está por debajo del ruido de fondo, va a sonar siempre.</p>
+<hr/>
+<h2 id="8-la-alarma-de-backends-no-saludables">8. La alarma de backends no saludables</h2>
+<p>Segunda alarma. Esta es un <b>síntoma</b>: si hay servidores que no pasan la verificación de salud, el usuario ya está viendo errores o lentitud. Por eso su severidad es mayor aunque el número sea más pequeño.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Definitions › Create Alarm</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Alarm name</td><td><code>lab05-backends-no-saludables</code></td></tr><tr><td>Alarm severity</td><td>Critical</td></tr><tr><td>Compartment (de la métrica)</td><td>el compartimento del servicio observado</td></tr><tr><td>Metric namespace</td><td><code>oci_lbaas</code></td></tr><tr><td>Metric name</td><td><code>UnHealthyBackendServers</code></td></tr><tr><td>Interval</td><td><code>1m</code></td></tr><tr><td>Statistic</td><td><code>Max</code></td></tr><tr><td>Operator</td><td>greater than</td></tr><tr><td>Value</td><td><code>0</code></td></tr><tr><td>Trigger delay minutes</td><td><code>2</code></td></tr><tr><td>Destination</td><td>el tema <code>lab05-alarmas-operacion</code></td></tr></tbody></table></div>
+<ol><li>Cree una alarma nueva con el nombre <code>lab05-backends-no-saludables</code>.</li><li>En severidad, elija <b>Critical</b>.</li><li>En la descripción de la métrica, vuelva a cambiar el compartimento al del servicio observado.</li><li>Elija el espacio de nombres <code>oci_lbaas</code> y la métrica <code>UnHealthyBackendServers</code>.</li><li>Deje el intervalo en <code>1m</code> y elija la estadística <b>máximo</b>, no el promedio. Con el promedio, un backend caído entre cuatro daría 0,25 y no pasaría el umbral de cero. Con el máximo, basta con que uno esté caído en cualquier punto de la ventana.</li><li>Operador «mayor que», valor <code>0</code>.</li><li>Retardo del disparador: <code>2</code> minutos. Más corto que el de CPU, porque el impacto es inmediato. Pero no cero: cuando el grupo crece, una instancia recién creada aparece como no saludable durante unos segundos hasta que la aplicación levanta, y sin esos dos minutos el autoescalamiento generaría una alarma crítica cada vez que hace su trabajo.</li><li>La consulta, en modo avanzado, debe leerse:</li></ol>
+<pre><code>UnHealthyBackendServers[1m].max() &gt; 0</code></pre>
+<ol><li>Destino: el mismo tema <code>lab05-alarmas-operacion</code>.</li><li>Cuerpo del mensaje:</li></ol>
+<pre><code>Hay servidores detrás del balanceador que no pasan la verificación de salud.
+El usuario final puede estar viendo errores o lentitud.
+
+QUE HACER (runbook): https://&lt;su-repo&gt;/runbooks/RUNBOOK-backends-caidos.md</code></pre>
+<ol><li>Guarde.</li></ol>
+<h3 id="por-qu-esta-es-critical-y-la-de-cpu-es-warning">Por qué esta es CRITICAL y la de CPU es WARNING</h3>
+<div class="tablacaja"><table><thead><tr><th></th><th>CPU al 45 %</th><th>Un backend caído</th></tr></thead><tbody><tr><td>Qué dice</td><td>Una causa posible</td><td>Un síntoma que ya se está viviendo</td></tr><tr><td>Magnitud del número</td><td>Grande</td><td>1</td></tr><tr><td>¿El usuario lo nota?</td><td>Todavía no</td><td>Sí</td></tr><tr><td>¿Despierta a alguien?</td><td>No</td><td>Sí</td></tr><tr><td>Severidad</td><td>WARNING</td><td>CRITICAL</td></tr></tbody></table></div>
+<p><b>La severidad la define el impacto, no la magnitud de la métrica.</b> Es la confusión más frecuente al heredar un modelo de monitoreo: alguien pone CRITICAL en la CPU porque 90 % suena más grave que 1, y termina con un turno de guardia que se despierta por cosas que se resuelven solas.</p>
+<p>Nadie llama al soporte para decir «su CPU está al 80 %». Llaman porque no les carga una pantalla.</p>
+<hr/>
+<h2 id="9-umbral-ventana-y-retardo-ajustar-sin-fabricar-ruido">9. Umbral, ventana y retardo: ajustar sin fabricar ruido</h2>
+<p>Las alarmas ya existen. Este capítulo es sobre editarlas, que es lo que de verdad se hace durante las primeras semanas de operación.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Definitions › (la alarma) › Edit</p>
+<h3 id="9-1-los-tres-n-meros-y-qu-mueve-cada-uno">9.1 Los tres números y qué mueve cada uno</h3>
+<div class="tablacaja"><table><thead><tr><th>Número</th><th>En la consola</th><th>Si lo baja</th><th>Si lo sube</th></tr></thead><tbody><tr><td><b>Umbral</b></td><td>Value</td><td>Suena antes y más veces</td><td>Suena menos, y puede no sonar nunca</td></tr><tr><td><b>Intervalo</b></td><td>Interval</td><td>Más sensible al pico corto</td><td>Más estable, más lenta</td></tr><tr><td><b>Retardo</b></td><td>Trigger delay minutes</td><td>Dispara más rápido</td><td>Filtra los picos pasajeros</td></tr></tbody></table></div>
+<p>El tiempo total hasta el correo es aproximadamente la suma de tres cosas:</p>
+<pre><code>  tiempo hasta el correo  ≈   publicación de la métrica
+                            + intervalo
+                            + retardo del disparador
+                            + entrega del correo (&lt; 1 min)</code></pre>
+<p>Con los valores de este manual —<code>1m</code> de intervalo y 3 minutos de retardo— la alarma de CPU tarda del orden de cuatro a cinco minutos desde que la carga empieza hasta que el correo llega. <b>Ese número hay que medirlo, no estimarlo</b>, y el capítulo 14 explica cómo.</p>
+<h3 id="9-2-el-umbral-y-la-ventana-deciden-juntos-si-la-alarma-sirve">9.2 El umbral y la ventana deciden juntos si la alarma sirve</h3>
+<div class="caja c-importante"><p class="cajatit">IMPORTANTE · Un umbral sin ventana es una máquina de ruido</p><p>Un umbral solo responde «¿cuánto es demasiado?». La ventana responde «¿durante cuánto tiempo?», y es la que separa una alarma útil de un generador de correos.</p><p>CPU por encima de 45 % <b>un instante</b> es un dato normal: pasa cada vez que arranca un proceso. CPU por encima de 45 % <b>sostenida tres minutos</b> es otra cosa, y ya se puede escribir una acción para ella.</p><p>Si le dieran a elegir un solo ajuste para mejorar un modelo de alarmas heredado, sería este: casi todas las alarmas ruidosas que uno se encuentra tienen un umbral razonable y una ventana de cero.</p></div>
+<h3 id="9-3-ajustes-seg-n-el-s-ntoma">9.3 Ajustes según el síntoma</h3>
+<p>Esta tabla viene del laboratorio y resuelve casi todo lo que aparece al ajustar:</p>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Ajuste</th></tr></thead><tbody><tr><td>Tarda demasiado en sonar</td><td>Baje el umbral, o baje el retardo a 2 minutos</td></tr><tr><td>Suena por picos que no eran nada</td><td>Suba el retardo antes que el umbral</td></tr><tr><td>Suena y nadie hace nada, siempre</td><td>El problema no es el umbral: es que no tiene acción escrita. Escríbala, o baje la severidad</td></tr><tr><td>Nunca suena</td><td>Revise que el umbral esté por debajo del de autoescalamiento, y el compartimento de la métrica</td></tr><tr><td>No se cierra nunca</td><td>El grupo llegó a su tamaño máximo. Es otra conversación, y es válida</td></tr></tbody></table></div>
+<p>Los dos últimos son los interesantes.</p>
+<p>Que <b>no suene nunca</b> casi siempre es configuración: umbral inalcanzable, compartimento equivocado o métrica que no se publica.</p>
+<p>Que <b>no se cierre nunca</b> casi nunca es configuración: normalmente significa que la plataforma hizo todo lo que podía y no alcanzó. Esa alarma sí merece a alguien despierto.</p>
+<h3 id="9-4-que-la-alarma-se-cierre-sola-es-tan-importante-como-que-">9.4 Que la alarma se cierre sola es tan importante como que dispare</h3>
+<p>Una alarma tiene dos transiciones, no una: entra en <code>FIRING</code> y vuelve a <code>OK</code>. La segunda casi nunca se diseña, y es la que decide si el equipo le va a hacer caso a la primera.</p>
+<ul><li><b>Si se cierra sola</b>, quien la recibió sabe que la plataforma reaccionó. La alarma queda registrada para la revisión semanal y nadie se levanta.</li><li><b>Si no se cierra sola nunca</b>, cada alarma queda abierta para siempre. El panel se llena de rojo permanente, y el rojo permanente es indistinguible del rojo nuevo. A las tres semanas nadie mira el panel.</li></ul>
+<p>Para que se cierre sola hacen falta dos condiciones, y las dos se configuran en esta pantalla:</p>
+<ol><li>Que la condición <b>pueda</b> dejar de cumplirse. Una alarma sobre un contador acumulado —<code>sum()</code> de errores desde siempre— nunca baja. Si la métrica solo crece, la alarma no se cierra jamás: hay que medir tasa, no total.</li><li>Que la agrupación <b>deje</b> bajar el número. Es el caso de la sección 6.5: sin agrupar, la CPU por instancia baja al crecer el grupo y la alarma se cierra; agrupando por suma, el total no baja y la alarma se queda encendida.</li></ol>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · Una alarma que no se cierra sola entrena al equipo a ignorarla</p><p>No es un problema estético. Es el mecanismo exacto por el que un modelo de observabilidad se muere: las alarmas que quedan encendidas ensucian el panel, el panel deja de mirarse, y cuando llega la alarma que sí importaba, llega a un panel que nadie mira hace meses.</p><p>Cuando revise una alarma heredada, hágale dos preguntas en vez de una: <b>¿en qué condiciones dispara?</b> y <b>¿en qué condiciones se apaga?</b> La segunda casi nunca tiene respuesta escrita.</p></div>
+<h3 id="9-5-ventanas-de-silencio-para-mantenimientos">9.5 Ventanas de silencio para mantenimientos</h3>
+<p>La pantalla de la alarma permite suprimir notificaciones durante un rango de fechas. Sirve para un mantenimiento planificado.</p>
+<p>Dos advertencias de uso:</p>
+<ul><li>Supresión <b>con fecha de fin</b>, siempre. Una supresión indefinida es una alarma apagada que todo el mundo cree encendida.</li><li>La alarma <b>sigue evaluando</b> durante la supresión; lo que se silencia es la notificación. En el histórico va a poder ver que disparó, lo cual es exactamente lo que se quiere para el informe posterior.</li></ul>
+<hr/>
+<h2 id="10-el-tablero-ver-varias-se-ales-juntas">10. El tablero: ver varias señales juntas</h2>
+<p>Un tablero no reemplaza a una alarma. La alarma es para lo que no se está mirando; el tablero es para cuando ya se está mirando. Confundirlos produce equipos que tienen pantallas enormes y se enteran por el cliente.</p>
+<h3 id="10-1-el-panel-r-pido-m-tricas-por-servicio">10.1 El panel rápido: métricas por servicio</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Service Metrics</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td>el compartimento del servicio observado</td></tr><tr><td>Metric namespace</td><td><code>oci_computeagent</code></td></tr></tbody></table></div>
+<ol><li>Seleccione el compartimento y el espacio de nombres.</li><li>La página dibuja de una vez todas las métricas de ese espacio de nombres, cada una en su gráfico: CPU, memoria, red, disco.</li><li>Cambie el espacio de nombres a <code>oci_lbaas</code> y va a ver las del balanceador: peticiones, backends saludables y no saludables, bytes.</li><li>En el menú de opciones de cada gráfico hay una acción para <b>crear una alarma a partir de esa consulta</b>. Es el camino corto: en vez de llenar la pantalla de creación desde cero, se parte de una consulta que ya está dibujada y que, por estar dibujada, se sabe que tiene datos.</li></ol>
+<h3 id="10-2-el-estado-de-las-alarmas">10.2 El estado de las alarmas</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Status</p>
+<ol><li>La página lista las alarmas con su estado actual. Es la pantalla que se deja abierta en una jornada de operación.</li><li>Entre a una alarma. En su página de detalle está el histórico de transiciones: cuándo pasó a <code>FIRING</code>, cuándo volvió a <code>OK</code>. Ese histórico es la evidencia del ciclo completo y es lo que se guarda para la revisión semanal.</li></ol>
+<h3 id="10-3-un-tablero-propio">10.3 Un tablero propio</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Dashboards</p>
+<ol><li>Cree un tablero nuevo en el compartimento de observabilidad. [VALIDAR] la ruta exacta del menú en la versión de consola que tenga: en algunas versiones los tableros se alcanzan desde el propio servicio de monitoreo.</li><li>Agregue widgets. Para este servicio, cuatro alcanzan:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Widget</th><th>Métrica</th><th>Para qué</th></tr></thead><tbody><tr><td>CPU por instancia</td><td><code>oci_computeagent</code> · <code>CpuUtilization</code> · <code>mean</code></td><td>La causa</td></tr><tr><td>Backends no saludables</td><td><code>oci_lbaas</code> · <code>UnHealthyBackendServers</code> · <code>max</code></td><td>El síntoma</td></tr><tr><td>Peticiones al balanceador</td><td><code>oci_lbaas</code> · conteo de peticiones</td><td>El tráfico</td></tr><tr><td>Tamaño del grupo</td><td>métrica del grupo de instancias</td><td>Si la plataforma reaccionó</td></tr></tbody></table></div>
+<ol><li>El cuarto es el que casi nadie pone y el que más explica: viendo la CPU y el tamaño del grupo en la misma pantalla, el ciclo «sube la carga, crece el grupo, baja la CPU» se lee de un vistazo, sin narración.</li></ol>
+<p><b>Cuatro widgets que se miran valen más que veinte que se ignoran.</b> El tablero útil cabe en una pantalla y responde cinco preguntas: ¿está arriba?, ¿va rápido?, ¿está fallando?, ¿aguanta lo que viene?, ¿cuánto cuesta?</p>
+<p>La quinta es la que casi siempre falta, y es la que más agradece quien firma el presupuesto.</p>
+<hr/>
+<h2 id="11-los-registros-logs-de-servicio-y-flow-logs">11. Los registros: logs de servicio y flow logs</h2>
+<p>Las métricas dicen <b>que</b> algo pasa. Los registros dicen <b>qué</b> pasó. La cadena completa de un diagnóstico es: alarma → métrica → registro → recurso. Sin el tercer eslabón, cuando algo no se resuelve solo, hay que entrar a las máquinas a mirar archivos, y eso a las tres de la mañana no escala.</p>
+<p>En OCI los registros se organizan en <b>grupos de registro</b> (log groups) que contienen <b>registros</b> (logs). Los de servicio se habilitan uno por uno: no vienen encendidos.</p>
+<h3 id="11-1-crear-el-grupo-de-registro">11.1 Crear el grupo de registro</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Log Groups › Create Log Group</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Compartment</td><td>el compartimento de observabilidad</td></tr><tr><td>Name</td><td><code>lab05-logs</code></td></tr><tr><td>Description</td><td><code>Registros del laboratorio de observabilidad</code></td></tr></tbody></table></div>
+<ol><li>Entre a los grupos de registro y presione <b>Create Log Group</b>.</li><li>Nómbrelo <code>lab05-logs</code>.</li><li>Presione <b>Create</b>.</li></ol>
+<p>El grupo es un contenedor: no ingiere nada por sí mismo y no cobra. Sirve para aplicar permisos y retención a un conjunto de registros de una vez.</p>
+<h3 id="11-2-habilitar-los-flow-logs-de-la-subred">11.2 Habilitar los flow logs de la subred</h3>
+<p>Los flow logs registran <b>quién habló con quién</b> dentro de la red: origen, destino, puerto, si se aceptó o se rechazó. Es el registro que responde la pregunta «¿esto llegó a entrar?» sin tener que entrar a ninguna máquina.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Logs › Enable service log</p>
+<div class="tablacaja"><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody><tr><td>Resource compartment</td><td>el compartimento del servicio observado</td></tr><tr><td>Service</td><td>el de registros de flujo de red (Flow Logs)</td></tr><tr><td>Resource</td><td>la subred donde están las instancias de aplicación</td></tr><tr><td>Log category</td><td>la categoría que incluye todos los registros</td></tr><tr><td>Log name</td><td><code>lab05-flowlogs-app</code></td></tr><tr><td>Log group</td><td><code>lab05-logs</code></td></tr><tr><td>Retention</td><td><code>30</code> días</td></tr></tbody></table></div>
+<ol><li>En la lista de registros, presione la acción de habilitar un registro de servicio.</li><li>Seleccione el compartimento del servicio observado.</li><li>En el desplegable de servicio, elija el de registros de flujo de red. Ese desplegable es, además, el catálogo de qué servicios de OCI pueden publicar registros: vale la pena abrirlo una vez y mirarlo entero.</li><li>En el recurso, elija la subred de aplicación. Los flow logs se habilitan por subred o por VCN, no por instancia.</li><li>Elija la categoría que incluye todos los registros.</li><li>Nombre el registro <code>lab05-flowlogs-app</code>.</li><li>Abra las opciones avanzadas y seleccione el grupo <code>lab05-logs</code>. Si no lo hace, la consola va a crear o elegir otro grupo y el registro va a terminar donde no lo va a buscar.</li><li>Deje la retención en 30 días. Es suficiente para investigar un incidente, y la retención es el principal multiplicador de la factura de registros.</li><li>Presione <b>Enable log</b>.</li></ol>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · Los registros son lo único de este manual que cobra por volumen</p><p>Las alarmas y el tema de notificación no tienen costo relevante. Los registros cobran por lo que ingieren y por lo que almacenan, y los flow logs de una subred con tráfico real generan bastante.</p><p>Tres decisiones que controlan el costo, en orden de impacto: <b>qué subredes</b> se registran, <b>qué retención</b> se les pone, y si se envían o no a un almacenamiento más barato para archivo. Habilitar flow logs en toda la VCN «por si acaso» es la forma más común de sorprenderse con la factura.</p><p>Para un laboratorio efímero no importa. Para el ambiente real, decídalo antes.</p></div>
+<h3 id="11-3-habilitar-los-registros-del-balanceador">11.3 Habilitar los registros del balanceador</h3>
+<ol><li>Repita la operación con el balanceador como recurso. Sus categorías de registro son dos y sirven para cosas distintas:</li></ol>
+<div class="tablacaja"><table><thead><tr><th>Categoría</th><th>Qué trae</th></tr></thead><tbody><tr><td>Acceso</td><td>Una línea por petición: ruta, código de respuesta, tiempo</td></tr><tr><td>Error</td><td>Los fallos del propio balanceador</td></tr></tbody></table></div>
+<ol><li>El registro de acceso es el que permite responder «¿cuántos 5xx hubo entre las 14:10 y las 14:20 y en qué rutas?», que es la pregunta que sigue a casi cualquier alarma de errores.</li></ol>
+<h3 id="11-4-lo-que-ya-est-registrado-sin-hacer-nada">11.4 Lo que ya está registrado sin hacer nada</h3>
+<div class="tablacaja"><table><thead><tr><th>Registro</th><th>Estado</th><th>Qué trae</th></tr></thead><tbody><tr><td>Audit</td><td>Siempre encendido</td><td>Toda llamada a la API: quién creó, borró o modificó qué</td></tr><tr><td>Flow logs</td><td>Hay que habilitarlo</td><td>Tráfico de red aceptado y rechazado</td></tr><tr><td>Registros de servicio</td><td>Hay que habilitarlos, uno por servicio</td><td>Acceso, errores, operaciones</td></tr><tr><td>Registros de la aplicación</td><td>Hay que enviarlos con un agente</td><td>Lo que escribe su código</td></tr></tbody></table></div>
+<p>Audit merece una mención aparte, porque resuelve solo la pregunta más frecuente después de una caída: <b>¿qué cambió?</b> La causa más probable de una caída total no es una avería: es un cambio. Audit está encendido desde el primer día del tenancy y nadie tiene que acordarse de habilitarlo.</p>
+<hr/>
+<h2 id="12-consultar-los-registros">12. Consultar los registros</h2>
+<p>Habilitar registros que nadie sabe consultar es gastar dinero en almacenamiento. Este capítulo es el que convierte el gasto en capacidad de diagnóstico.</p>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Search</p>
+<ol><li>Abra la búsqueda de registros.</li><li>Seleccione el rango de tiempo. Empiece por la última hora: los rangos amplios sobre registros grandes tardan y casi nunca hacen falta al principio.</li><li>Seleccione qué registros buscar. Puede elegir un compartimento entero, un grupo de registro o un registro concreto. Para empezar, elija <code>lab05-flowlogs-app</code>.</li><li>La consola arma una consulta base y muestra los resultados más recientes. Verifique que hay líneas. <b>Si no hay ninguna después de diez minutos</b>, el registro está habilitado pero no está recibiendo: revise que la subred elegida sea la que tiene tráfico.</li></ol>
+<h3 id="12-1-el-lenguaje-de-consulta">12.1 El lenguaje de consulta</h3>
+<p>La consulta base tiene esta forma:</p>
+<pre><code>search "&lt;compartimento&gt;/&lt;grupo de registro&gt;/&lt;registro&gt;"</code></pre>
+<p>Y se encadenan operaciones con barras verticales, igual que en una tubería de shell:</p>
+<pre><code>search "lab-laboratorio/lab05-logs/lab05-flowlogs-app"
+  | sort by datetime desc</code></pre>
+<p>Filtrar por un campo:</p>
+<pre><code>search "lab-laboratorio/lab05-logs/lab05-flowlogs-app"
+  | where data.destinationPort = 80
+  | sort by datetime desc</code></pre>
+<p>Agrupar y contar, que es lo que responde «¿quién está generando este tráfico?»:</p>
+<pre><code>search "lab-laboratorio/lab05-logs/lab05-flowlogs-app"
+  | where data.destinationPort = 80
+  | summarize count() by data.sourceAddress</code></pre>
+<p>Los campos propios de cada registro van bajo el prefijo <code>data</code>. Para los flow logs, los más usados son la dirección de origen, la de destino, el puerto de destino, el protocolo y el resultado (si el paquete se aceptó o se rechazó). <b>[VALIDAR] el nombre exacto del campo de resultado en su versión</b>: cambió entre versiones del formato de flow logs, y la forma segura de averiguarlo es expandir una línea de resultado en la consola y leer los nombres reales.</p>
+<p>Ese, de hecho, es el método general y vale para cualquier registro nuevo:</p>
+<ol><li>Corra la consulta base sin filtros.</li><li>Expanda una línea de resultado.</li><li>Lea los nombres de campo que trae.</li><li>Escriba el filtro con esos nombres.</li></ol>
+<p>Es más rápido que buscar el esquema en la documentación, y no se equivoca.</p>
+<h3 id="12-2-tres-consultas-que-vale-la-pena-dejar-guardadas">12.2 Tres consultas que vale la pena dejar guardadas</h3>
+<p><b>Tráfico rechazado en la última hora.</b> Responde «¿alguien está tocando puertas que no debería?»:</p>
+<pre><code>search "lab-laboratorio/lab05-logs/lab05-flowlogs-app"
+  | where &lt;campo de resultado&gt; = 'REJECT'
+  | summarize count() by data.sourceAddress</code></pre>
+<p>En el servicio observado, con el puerto 22 abierto a <code>0.0.0.0/0</code>, esta consulta devuelve tráfico de escaneo desde internet a las pocas horas de levantar el ambiente. Es la demostración más concreta de por qué esa apertura es aceptable en un laboratorio desechable y no lo es en un ambiente con datos.</p>
+<p><b>Códigos de respuesta del balanceador</b>, sobre el registro de acceso:</p>
+<pre><code>search "lab-laboratorio/lab05-logs/&lt;registro de acceso del balanceador&gt;"
+  | summarize count() by &lt;campo del codigo de respuesta&gt;</code></pre>
+<p><b>Qué cambió en la última hora</b>, sobre Audit. Es la primera consulta después de cualquier caída inesperada:</p>
+<pre><code>search "lab-laboratorio/_Audit"
+  | sort by datetime desc</code></pre>
+<ol><li>Cada consulta útil se guarda. La consola permite guardar búsquedas; una búsqueda guardada con un nombre claro es, en la práctica, un runbook de una sola línea.</li></ol>
+<h3 id="12-3-la-cadena-completa-con-un-ejemplo">12.3 La cadena completa, con un ejemplo</h3>
+<p>Así se ve el diagnóstico cuando las tres capas están puestas:</p>
+<pre><code>  1. Llega el correo          alarma lab05-backends-no-saludables · CRITICAL
+           │
+  2. Métrica                  UnHealthyBackendServers: de 0 a 2 a las 14:12
+           │
+  3. Registro de acceso       5xx desde las 14:11, en dos backends
+           │
+  4. Audit                    a las 14:09 alguien modificó una regla de red
+           │
+  5. Recurso                  se revierte el cambio · el servicio vuelve</code></pre>
+<p>Sin el paso 4, el equipo habría reiniciado instancias durante veinte minutos. <b>La causa más probable de una caída total es un cambio, no una avería</b>, y el registro que lo dice ya estaba encendido.</p>
+<hr/>
+<h2 id="13-la-matriz-qu-despierta-a-alguien-y-qu-no">13. La matriz: qué despierta a alguien y qué no</h2>
+<p>Este es el entregable del laboratorio. Las alarmas de los capítulos 7 y 8 son dos ejemplos; la matriz es el método.</p>
+<p>La idea es simple y difícil de sostener: <b>una alarma sin acción escrita no es una alarma, es ruido.</b> Y el ruido tiene un costo que se paga tarde: dentro de seis meses nadie mira las alarmas, incluidas las buenas.</p>
+<h3 id="13-1-s-ntoma-y-causa">13.1 Síntoma y causa</h3>
+<p>La distinción que ordena todo lo demás:</p>
+<div class="tablacaja"><table><thead><tr><th></th><th>Qué dice</th><th>Ejemplos</th><th>¿Despierta a alguien?</th></tr></thead><tbody><tr><td><b>Síntoma</b></td><td>El usuario lo está sintiendo</td><td>No responde · va lento · da error</td><td><b>Sí</b></td></tr><tr><td><b>Causa</b></td><td>Por qué puede estar pasando</td><td>CPU · memoria · disco · conexiones</td><td>Casi nunca</td></tr></tbody></table></div>
+<p>La mayoría de los equipos empieza por las causas, porque son las fáciles de medir: la nube las regala. Pero nadie llama al soporte para decir que una CPU está al 80 %.</p>
+<h3 id="13-2-las-cuatro-preguntas-por-se-al">13.2 Las cuatro preguntas por señal</h3>
+<p>Por cada señal candidata se responden cuatro cosas, en este orden:</p>
+<ol><li><b>¿Qué umbral?</b></li><li><b>¿Quién responde?</b></li><li><b>¿Qué hace?</b> (el runbook, aunque sea de tres líneas)</li><li><b>¿Esto despierta a alguien de madrugada?</b></li></ol>
+<p>La cuarta es la que hace trabajar a la matriz. En cuanto alguien dice «sí, despierta» y la casilla de acción está vacía, esa fila es ruido — y tiene exactamente dos salidas válidas: <b>escribirle la acción, o bajarle la severidad.</b> Dejarla como está no es una de ellas.</p>
+<div class="tablacaja"><table><thead><tr><th>Estado</th><th>Cuándo</th></tr></thead><tbody><tr><td><b>Lista</b></td><td>Existe, con responsable y acción</td></tr><tr><td><b>Ruido</b></td><td>Despierta a alguien sin responsable o sin acción escrita</td></tr><tr><td><b>Por implementar</b></td><td>No existe todavía</td></tr><tr><td><b>Incompleta</b></td><td>Existe pero le falta responsable o acción</td></tr></tbody></table></div>
+<h3 id="13-3-el-cat-logo-de-partida">13.3 El catálogo de partida</h3>
+<p>Dieciséis señales candidatas en diez categorías. Las dos que este manual construyó son la S-06 y la S-07.</p>
+<div class="tablacaja"><table><thead><tr><th>ID</th><th>Categoría</th><th>Señal</th><th>Síntoma o causa</th><th>Umbral sugerido</th></tr></thead><tbody><tr><td><b>S-01</b></td><td>Disponibilidad</td><td>El servicio responde desde fuera (prueba sintética)</td><td>Síntoma</td><td>2 fallos seguidos</td></tr><tr><td><b>S-02</b></td><td>Latencia</td><td>Latencia p95 de la API</td><td>Síntoma</td><td>Acordar con el compromiso de servicio</td></tr><tr><td><b>S-03</b></td><td>Errores</td><td>Tasa de respuestas 5xx</td><td>Síntoma</td><td>&gt; 1 % durante 5 min</td></tr><tr><td><b>S-04</b></td><td>Errores</td><td>Fallos de integración con sistemas externos</td><td>Síntoma</td><td>&gt; N por hora</td></tr><tr><td><b>S-05</b></td><td>Tráfico</td><td>Caída abrupta del volumen de transacciones</td><td>Síntoma</td><td>&lt; 50 % de lo normal para esa hora</td></tr><tr><td><b>S-06</b></td><td>Saturación</td><td>CPU de la capa de aplicación</td><td>Causa</td><td><b>&gt; 45 % sostenido 3 min</b></td></tr><tr><td><b>S-07</b></td><td>Disponibilidad</td><td>Servidores no saludables tras el balanceador</td><td>Síntoma</td><td><b>&gt; 0 durante 2 min</b></td></tr><tr><td><b>S-08</b></td><td>Saturación</td><td>Conexiones o memoria de la base de datos</td><td>Causa</td><td>&gt; 80 % del máximo</td></tr><tr><td><b>S-09</b></td><td>Capacidad</td><td>Almacenamiento de la base de datos</td><td>Causa</td><td>&gt; 75 % (avisa con semanas, no con horas)</td></tr><tr><td><b>S-10</b></td><td>Capacidad</td><td>El grupo lleva rato en su tamaño máximo</td><td>Causa</td><td>En el máximo más de 15 min</td></tr><tr><td><b>S-11</b></td><td>Negocio</td><td>Transacciones detenidas en proceso</td><td>Síntoma</td><td>&gt; N detenidas más de 4 h</td></tr><tr><td><b>S-12</b></td><td>Negocio</td><td>Tiempo de proceso p95 por canal</td><td>Síntoma</td><td>Acordar con el compromiso de servicio</td></tr><tr><td><b>S-13</b></td><td>Costo</td><td>Consumo del mes contra el presupuesto</td><td>Causa</td><td>50 % · 75 % · 90 % · proyección</td></tr><tr><td><b>S-14</b></td><td>Seguridad</td><td>Cambios en identidades y reglas de red</td><td>Causa</td><td>Cualquier cambio, siempre</td></tr><tr><td><b>S-15</b></td><td>Seguridad</td><td>Certificado TLS próximo a vencer</td><td>Causa</td><td>Faltan menos de 30 días</td></tr><tr><td><b>S-16</b></td><td>Confiabilidad</td><td>Tiempo medio de recuperación del último mes</td><td>Indicador</td><td>No es alarma: se revisa cada mes</td></tr></tbody></table></div>
+<p>Dos filas donde conviene detenerse:</p>
+<ul><li><b>S-13, el costo.</b> Casi nadie la tiene como señal de operación, y es la que más agradece quien firma el presupuesto. Se implementa con presupuestos y alertas, no con alarmas de métrica.</li><li><b>S-11 y S-12, las de negocio.</b> Son las únicas que detectan que el servicio está roto <b>para el cliente</b> aunque toda la infraestructura esté verde. Salen de una consulta a la base de datos, no de una métrica de plataforma.</li></ul>
+<h3 id="13-4-c-mo-se-lee-el-resultado">13.4 Cómo se lee el resultado</h3>
+<p>Con la matriz llena, tres lecturas:</p>
+<ol><li><b>Señales que despiertan sin acción escrita.</b> Si el número no es cero, esa es la primera semana de trabajo — y es la más barata de todas, porque consiste en <i>escribir, no en construir</i>.</li><li><b>Cobertura por categoría.</b> Las categorías vacías son puntos ciegos. <i>Disponibilidad</i> y <i>Errores</i> no se pueden quedar vacías: son las dos que el cliente nota primero.</li><li><b>Señales que despiertan 24x7.</b> Si son más de seis o siete, es una promesa que ningún equipo pequeño sostiene. Mejor menos alarmas y que se les haga caso.</li></ol>
+<h3 id="13-5-el-n-mero-que-casi-nadie-mide">13.5 El número que casi nadie mide</h3>
+<p>Cuatro indicadores rodean esta conversación, y el más útil es el que menos se mide:</p>
+<div class="tablacaja"><table><thead><tr><th>Número</th><th>Qué mide</th><th>Trampa habitual</th></tr></thead><tbody><tr><td>Disponibilidad</td><td>% del tiempo que el servicio responde</td><td>Se mide desde dentro, donde casi siempre responde</td></tr><tr><td><b>MTTD</b> (detección)</td><td>Desde que empieza el problema hasta que alguien se entera</td><td>Casi nadie lo mide, y es donde está el margen</td></tr><tr><td>MTTR (recuperación)</td><td>Desde que se detecta hasta que se resuelve</td><td>Se confunde con «desde que se reportó»</td></tr><tr><td>Frecuencia</td><td>Cuántas veces al mes</td><td>Tres caídas de 5 min molestan más que una de 15</td></tr></tbody></table></div>
+<p><b>Si el cliente avisa antes que la alarma, el problema no fue la caída: fue la observabilidad.</b> Y ese es un problema que se arregla con configuración, no con más infraestructura.</p>
+<p>Y sobre los «nueves», la conversación honesta:</p>
+<div class="tablacaja"><table><thead><tr><th>Disponibilidad</th><th>Tiempo caído al mes</th><th>Qué exige en la práctica</th></tr></thead><tbody><tr><td>99 %</td><td>~7 h</td><td>Monitoreo básico y atención en horario</td></tr><tr><td>99,5 %</td><td>~3,6 h</td><td>Alarmas con dueño; guardia de alguna forma</td></tr><tr><td>99,9 %</td><td>~43 min</td><td>Guardia real, redundancia, runbooks probados</td></tr><tr><td>99,95 %</td><td>~22 min</td><td>Automatización de la recuperación</td></tr><tr><td>99,99 %</td><td>~4 min</td><td>Multi-zona, despliegues sin corte, inversión considerable</td></tr></tbody></table></div>
+<p>Cada nueve adicional cuesta del orden de diez veces más. Prometer 99,9 % sin guardia ni redundancia no es un compromiso: es una esperanza.</p>
+<hr/>
+<h2 id="14-validaci-n-de-extremo-a-extremo">14. Validación de extremo a extremo</h2>
+<p>Nada de lo anterior está validado hasta que la alarma complete el ciclo: <code>OK</code> → <code>FIRING</code> → <code>OK</code>. Este capítulo lo provoca y lo mide.</p>
+<h3 id="14-1-antes-de-generar-carga">14.1 Antes de generar carga</h3>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Status</p>
+<ol><li>Confirme que las dos alarmas aparecen y que su estado es <code>OK</code>.</li><li>Confirme que la suscripción está en <code>ACTIVE</code>, no en <code>PENDING</code>. Si se saltó el capítulo 5, este es el momento en que el laboratorio deja de funcionar.</li><li>Anote la hora. Va a necesitarla.</li></ol>
+<div class="caja c-importante"><p class="cajatit">IMPORTANTE · «Sin datos» no es calma: es ceguera, y se ve idéntica</p><p>Una alarma puede estar en tres situaciones, no en dos: <b>tranquila</b> (recibe datos y la condición no se cumple), <b>disparada</b>, y <b>sin datos</b> (no está viendo nada).</p><p>La tercera es la peligrosa, porque en la lista se ve exactamente igual que la primera. Una alarma sobre una métrica que dejó de publicarse es tan silenciosa como una que está funcionando perfectamente.</p><p>Para distinguirlas: abra la alarma y mire el gráfico de su página de detalle. Si hay línea, está viendo datos. Si el gráfico está vacío con el servicio arriba, la alarma está ciega. Y si esto le importa de verdad, cree la alarma de ausencia de la sección 6.6.</p></div>
+<p>La verificación equivalente por CLI, que es la que se deja corriendo en una pantalla durante una jornada de operación:</p>
+<pre><code>COMP07="ocid1.compartment.oc1..aaaaEJEMPLO"
+
+oci monitoring alarm-status list-alarms-status --compartment-id "$COMP07" \
+  --query 'data[].{alarma:"display-name",estado:status}' --output table</code></pre>
+<p>Dos detalles del comando, que costaron una corrección en el laboratorio:</p>
+<ul><li>El subcomando es <code>list-alarms-status</code>, no <code>list</code>. <code>oci monitoring alarm-status list</code> <b>no existe</b>.</li><li>Para la salud de los backends el comando es <code>oci lb backend-set-health get</code>. <code>oci lb backend-health list</code> <b>tampoco existe</b>.</li></ul>
+<h3 id="14-2-provocar-el-ciclo">14.2 Provocar el ciclo</h3>
+<ol><li>Genere carga contra el balanceador. Cualquier generador sirve mientras sostenga la CPU por encima del umbral durante varios minutos; lo importante es que la carga sea suficiente para pasar de 45 % y no tanta como para saturar de inmediato.</li><li>Quédese mirando la pantalla de estado de alarmas y cronometre.</li></ol>
+<p>Esto es lo que debe pasar, y en este orden:</p>
+<pre><code>  t0         empieza la carga
+   │
+   ├─ ~1 min   el agente publica el primer punto por encima de 45 %
+   │
+   ├─ +3 min   se cumple el retardo del disparador → la alarma pasa a FIRING
+   │
+   ├─ &lt;1 min   el correo llega a la bandeja de entrada
+   │
+   ├─ ~7 min   el autoescalamiento agrega instancias
+   │           (medido en el laboratorio de elasticidad: 410 s para pasar de 2 a 4)
+   │
+   ├─ ~12 min  la capacidad nueva ya atiende tráfico
+   │           (medido: 707 s)
+   │
+   └─ la CPU por instancia baja de 45 % → la alarma vuelve a OK, sola</code></pre>
+<ol><li>Cuando el estado cambie a <code>FIRING</code>, <b>abra el correo</b>. Debe haber llegado en menos de un minuto. Mire el cuerpo: trae el enlace al runbook. Eso es lo que va a leer alguien de madrugada, y es la pieza que de verdad baja el tiempo de recuperación.</li><li><b>No haga nada más.</b> Deje correr.</li><li>El grupo de instancias crece, la CPU por instancia baja y la alarma vuelve a <code>OK</code> sin intervención.</li></ol>
+<h3 id="14-3-los-n-meros-medidos">14.3 Los números medidos</h3>
+<p>Este es el resultado real del ensayo de este laboratorio, y es el que se cita en vez de estimar:</p>
+<div class="tablacaja"><table><thead><tr><th>Momento</th><th>Resultado</th></tr></thead><tbody><tr><td>Alarma en reposo</td><td><code>OK</code></td></tr><tr><td>Con carga: CPU en <b>62 %</b> contra un umbral de <b>45 %</b></td><td><b><code>FIRING</code></b></td></tr><tr><td>Tras bajar la carga, sin intervención</td><td><b><code>OK</code> — se cerró sola</b></td></tr></tbody></table></div>
+<p>Del laboratorio de elasticidad, que es lo que explica los tiempos del diagrama:</p>
+<div class="tablacaja"><table><thead><tr><th>Evento</th><th>Medido</th></tr></thead><tbody><tr><td>CPU bajo carga</td><td>76 %</td></tr><tr><td>El grupo crece de 2 a 4 instancias</td><td>410 s</td></tr><tr><td>La capacidad nueva atiende tráfico</td><td>707 s</td></tr><tr><td>El grupo baja de 6 a 5 al cortar la carga</td><td>251 s</td></tr></tbody></table></div>
+<div class="caja c-validacion"><p class="cajatit">VALIDACIÓN · El laboratorio quedó bien si se cumplen estas cinco</p><p>1. La suscripción está en <code>ACTIVE</code>, no en <code>PENDING</code>. 2. Las dos alarmas aparecen con estado <code>OK</code> y su gráfico de detalle tiene línea (no están ciegas). 3. Bajo carga, la alarma de CPU pasa a <code>FIRING</code>. 4. <b>El correo llega</b>, y trae el enlace al runbook dentro del cuerpo. 5. <b>La alarma vuelve a <code>OK</code> sola</b>, sin que nadie toque nada.</p><p>La quinta es la que no se puede saltar. Una alarma que dispara pero no se cierra solo demostró la mitad del mecanismo, y es la mitad fácil.</p></div>
+<h3 id="14-4-evidencia-que-conviene-guardar">14.4 Evidencia que conviene guardar</h3>
+<div class="tablacaja"><table><thead><tr><th>Evidencia</th><th>Por qué</th></tr></thead><tbody><tr><td>Captura del correo con el enlace al runbook visible</td><td>Es la imagen del laboratorio</td></tr><tr><td>Captura del panel con una alarma disparada</td><td>Sirve si la demostración en vivo falla</td></tr><tr><td>Captura del histórico mostrando el cierre automático</td><td>La prueba de que se cerró sola</td></tr><tr><td>El tiempo medido desde la carga hasta el disparo</td><td>Es el número que se dice en voz alta, y no se estima</td></tr></tbody></table></div>
+<p>Antes de compartir cualquier captura del correo, revise que no aparezcan direcciones de correo ni identificadores internos.</p>
+<hr/>
+<h2 id="15-qu-puede-salir-mal">15. Qué puede salir mal</h2>
+<p>Los errores de esta tabla están documentados en el laboratorio. No son hipótesis.</p>
+<div class="tablacaja"><table><thead><tr><th>Síntoma</th><th>Causa</th><th>Arreglo</th></tr></thead><tbody><tr><td>La alarma dispara y no llega ningún correo</td><td>La suscripción está en <code>PENDING</code>: nadie hizo clic en el enlace de confirmación</td><td>Abrir el correo y confirmar. Si no llegó, revisar no deseados y reenviar la confirmación desde el menú de la suscripción</td></tr><tr><td>El correo de confirmación nunca llegó</td><td>Filtro corporativo</td><td>Revisar no deseados; probar con otra dirección. No borrar y recrear la suscripción: genera pendientes duplicadas</td></tr><tr><td>La alarma se ve perfecta y nunca dispara</td><td>El compartimento de la métrica quedó en el de la alarma</td><td>Editar la alarma y cambiar el compartimento <b>de la descripción de la métrica</b> al del servicio observado</td></tr><tr><td>La alarma nunca dispara y el compartimento es correcto</td><td>Nombre de métrica o espacio de nombres equivocado</td><td>Verificar en el explorador de métricas que la métrica existe y se dibuja. Una alarma sobre una métrica inexistente se crea sin error</td></tr><tr><td>El desplegable de métricas aparece vacío</td><td>Falta <code>read metrics</code> en el compartimento observado, o el compartimento es el equivocado</td><td>Revisar la política y el selector de compartimento</td></tr><tr><td>No hay métricas de CPU en ninguna instancia</td><td>El plugin de monitoreo del agente está deshabilitado</td><td>Habilitarlo en la instancia y en la plantilla del grupo. Es la causa número uno de que el autoescalamiento tampoco reaccione</td></tr><tr><td>El servicio acaba de levantarse y no hay métricas</td><td>Las métricas tardan en publicarse</td><td>Esperar 10 minutos antes de concluir que algo está mal</td></tr><tr><td>La CPU no pasa del 48 % por más carga que se le ponga</td><td>El servidor de prueba usa hilos y el bloqueo global del intérprete serializa el bucle de CPU: en 1 OCPU el techo es la mitad exacta</td><td>Usar un generador de carga que bifurque procesos. Con umbral de 55 % la alarma no sonaría nunca; con 45 % sí</td></tr><tr><td>Se corta la carga y la CPU sigue arriba</td><td>Los procesos hijos del generador quedaron huérfanos</td><td>Matar también a los hijos. Sin eso, el escalamiento hacia adentro no llega nunca y la alarma no se cierra</td></tr><tr><td>La alarma no se cierra nunca</td><td>El grupo de instancias llegó a su tamaño máximo</td><td>Es una conversación válida, no un error: la plataforma hizo todo lo que podía. Revisar el tope de capacidad</td></tr><tr><td>La alarma no se cierra nunca y el grupo no está en su tope</td><td>La consulta agrupa de forma que el número no puede bajar</td><td>Revisar la agrupación: sin agrupar, la CPU por instancia baja al crecer el grupo</td></tr><tr><td>La alarma se cierra tan rápido que no se alcanza a ver</td><td>El autoescalamiento reaccionó antes de lo previsto</td><td>Mirar el histórico en la página de detalle de la alarma: las transiciones quedan registradas</td></tr><tr><td>El estado dice «sin datos» y se parece a la calma</td><td>La alarma no está viendo nada</td><td>Abrir la alarma y mirar su gráfico. Revisar espacio de nombres, nombre de métrica y compartimento de la métrica</td></tr><tr><td><code>oci monitoring alarm-status list</code> devuelve error</td><td>Ese subcomando no existe</td><td>Es <code>oci monitoring alarm-status list-alarms-status</code></td></tr><tr><td><code>oci lb backend-health list</code> devuelve error</td><td>Ese comando no existe</td><td>Es <code>oci lb backend-set-health get --load-balancer-id … --backend-set-name …</code></td></tr><tr><td>El enlace del runbook en el correo no abre</td><td>El repositorio es privado</td><td>Publicarlo donde la operación pueda leerlo. Un runbook que no abre de madrugada no es un runbook</td></tr><tr><td>La búsqueda de registros no devuelve nada</td><td>El registro se habilitó hace poco, o sobre la subred equivocada</td><td>Esperar unos minutos; verificar que la subred elegida sea la que tiene tráfico</td></tr><tr><td>Un filtro de la búsqueda de registros no encuentra nada</td><td>El nombre del campo no es el que se supuso</td><td>Correr la consulta sin filtros, expandir una línea y leer los nombres reales</td></tr></tbody></table></div>
+<h3 id="el-error-que-m-s-cuesta-aunque-no-aparezca-como-error">El error que más cuesta, aunque no aparezca como error</h3>
+<p>Una alarma huérfana: apunta a un servicio que ya no existe. Queda en estado «sin datos» para siempre, en un panel que alguien mira de reojo, y es indistinguible de una alarma sana.</p>
+<p>Es exactamente el antipatrón del que habla este laboratorio: parece observabilidad, ocupa lugar en el panel, y no vigila nada. Por eso el capítulo siguiente importa más de lo que parece.</p>
+<hr/>
+<h2 id="16-limpieza">16. Limpieza</h2>
+<p>El orden importa. Borrar el tema antes que las alarmas deja alarmas apuntando a un destino que no existe.</p>
+<ol><li><b>Deshabilite o borre las alarmas.</b></li></ol>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Monitoring › Alarm Definitions</p>
+<p>Seleccione cada alarma y bórrela. Si va a volver a usar el laboratorio, deshabilitarlas es suficiente: una alarma deshabilitada no evalúa ni notifica.</p>
+<ol><li><b>Borre la suscripción y después el tema.</b></li></ol>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Notifications › Topics</p>
+<p>Entre al tema, borre la suscripción y luego el tema. Un tema con suscripciones se borra igual, pero dejar la suscripción huérfana en la cuenta de correo de alguien es una descortesía innecesaria.</p>
+<ol><li><b>Deshabilite los registros de servicio.</b></li></ol>
+<p class="consola"><span>Consola de OCI</span>Observability &amp; Management › Logging › Logs</p>
+<p>Deshabilite el flow log y los registros del balanceador. <b>Este es el paso que de verdad detiene un cobro</b>: mientras el registro esté habilitado, sigue ingiriendo.</p>
+<ol><li><b>Borre el grupo de registro.</b> No se borra si todavía tiene registros dentro: por eso va después del paso 3.</li></ol>
+<ol><li><b>Borre el tablero</b>, si creó uno.</li></ol>
+<ol><li><b>El servicio observado se destruye con su propio procedimiento.</b> Este manual no lo creó y no debe borrarlo desde aquí.</li></ol>
+<h3 id="qu-se-queda-cobrando-si-la-limpieza-se-hace-mal">Qué se queda cobrando si la limpieza se hace mal</h3>
+<div class="tablacaja"><table><thead><tr><th>Lo que queda</th><th>¿Cobra?</th><th>Consecuencia</th></tr></thead><tbody><tr><td>Un registro de servicio habilitado</td><td><b>Sí</b>, por ingesta y almacenamiento</td><td>Es lo único de este manual con costo continuo apreciable</td></tr><tr><td>Un grupo de registro vacío</td><td>No</td><td>Ruido en la consola</td></tr><tr><td>Una alarma habilitada apuntando a un servicio destruido</td><td>No de forma apreciable</td><td>Queda «sin datos» para siempre: el antipatrón</td></tr><tr><td>Un tema con suscripción activa</td><td>No de forma apreciable</td><td>Alguien sigue suscrito a algo que ya no existe</td></tr><tr><td>El servicio observado (instancias, balanceador)</td><td><b>Sí, y es lo caro</b></td><td>Se destruye con su propio procedimiento</td></tr></tbody></table></div>
+<p>El orden de magnitud, medido: el ensayo completo del laboratorio —incluyendo el servicio observado— costó <b>0,13 USD</b> de cómputo. La capa de observabilidad no movió esa cifra. Lo que puede crecer, si se deja habilitado sobre una red con tráfico real, son los registros.</p>
+<hr/>
+<h2 id="17-documentaci-n-oficial">17. Documentación oficial</h2>
+<div class="tablacaja"><table><thead><tr><th>Tema</th><th>Enlace</th></tr></thead><tbody><tr><td>Monitoring — inicio</td><td>https://docs.oracle.com/en-us/iaas/Content/Monitoring/home.htm</td></tr><tr><td>Conceptos de Monitoring</td><td>https://docs.oracle.com/en-us/iaas/Content/Monitoring/Concepts/monitoringoverview.htm</td></tr><tr><td>Lenguaje de consulta de métricas (MQL)</td><td>https://docs.oracle.com/en-us/iaas/Content/Monitoring/Reference/mql.htm</td></tr><tr><td>Gestión de alarmas</td><td>https://docs.oracle.com/en-us/iaas/Content/Monitoring/Tasks/managingalarms.htm</td></tr><tr><td>Notifications — inicio</td><td>https://docs.oracle.com/en-us/iaas/Content/Notification/home.htm</td></tr><tr><td>Temas y suscripciones</td><td>https://docs.oracle.com/en-us/iaas/Content/Notification/Tasks/managingtopicsandsubscriptions.htm</td></tr><tr><td>Logging — inicio</td><td>https://docs.oracle.com/en-us/iaas/Content/Logging/home.htm</td></tr><tr><td>Registros de servicio</td><td>https://docs.oracle.com/en-us/iaas/Content/Logging/Concepts/service_logs.htm</td></tr><tr><td>Flow logs de VCN</td><td>https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/vcnflowlogs.htm</td></tr><tr><td>Dashboards</td><td>https://docs.oracle.com/en-us/iaas/Content/Dashboards/home.htm</td></tr><tr><td>Audit</td><td>https://docs.oracle.com/en-us/iaas/Content/Audit/home.htm</td></tr><tr><td>Políticas de Monitoring</td><td>https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/monitoringpolicyreference.htm</td></tr><tr><td>Políticas de Notifications</td><td>https://docs.oracle.com/en-us/iaas/Content/Identity/Reference/notificationpolicyreference.htm</td></tr></tbody></table></div>
+<hr/>
+<h2 id="anexo-qu-falta-para-que-esto-sea-un-modelo-completo">Anexo · Qué falta para que esto sea un modelo completo</h2>
+<p>Lo que este manual construye es la cadena mínima: <b>señal → umbral → destinatario → acción</b>. Es el mínimo viable, y el mínimo viable es justamente lo que se puede tener funcionando en dos semanas.</p>
+<p>Un modelo completo para producción añade al menos:</p>
+<div class="tablacaja"><table><thead><tr><th>Pieza</th><th>Para qué</th></tr></thead><tbody><tr><td>Prueba sintética desde fuera de la nube</td><td>Enterarse antes que el cliente. Es la señal S-01, y da disponibilidad y MTTD de una vez</td></tr><tr><td>Trazas distribuidas</td><td>Saber cuál de los servicios de una cadena es el lento</td></tr><tr><td>Registros centralizados y correlacionados</td><td>Bajar del síntoma al detalle sin entrar a cada máquina</td></tr><tr><td>Tablero ejecutivo</td><td>Un resumen que alguien de dirección mire sin traducción</td></tr><tr><td>Revisión periódica de alarmas</td><td>Que la matriz no se vuelva obsoleta en seis meses</td></tr></tbody></table></div>
+<p>Y para un equipo que hoy no mide nada, el orden que da resultados más rápido no empieza por ninguna herramienta nueva:</p>
+<ol><li><b>Una prueba sintética desde fuera</b>, cada minuto, del recorrido más importante.</li><li><b>Registrar los incidentes en una hoja de cálculo</b>: cuándo empezó, cuándo se detectó, cuándo se resolvió, qué lo causó. Cuatro columnas.</li><li><b>Una revisión mensual de 30 minutos</b> con esa hoja delante.</li></ol>
+<p>En dos meses eso produce los números que hoy no existen — y sin esos números, cualquier discusión sobre compromisos de servicio es una discusión de opiniones.</p>
+</div></main>
+<footer><div class="envoltura">
+  Material de taller, publicado bajo licencia UPL-1.0 ·
+  <a href="https://github.com/jesmonsa/oci-workshop-labs">Código y laboratorios en GitHub</a>
+</div></footer>
+</body></html>

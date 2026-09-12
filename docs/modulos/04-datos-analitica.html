@@ -4,7 +4,7 @@
 <title>Módulo 04 · Datos y analítica operacional</title>
 <link rel="stylesheet" href="../estilos.css">
 </head><body>
-<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html" class="activo">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
+<nav><div class="envoltura"><span class="marca">Laboratorios OCI</span><a href="../index.html">Inicio</a><a href="../despliegue.html">Despliegue</a><a href="../manuales.html">Manuales</a><a href="../modulos/01-elasticidad.html">01</a><a href="../modulos/02-seguridad.html">02</a><a href="../modulos/03-agente-ia.html">03</a><a href="../modulos/04-datos-analitica.html" class="activo">04</a><a href="../modulos/05-observabilidad.html">05</a><a href="../modulos/06-agentes-mcp.html">06</a><span class="derecha"><a href="https://github.com/jesmonsa/oci-workshop-labs">GitHub ↗</a></span></div></nav>
 
 <header class="principal"><div class="envoltura">
   <span class="etiqueta">Módulo 04</span>
@@ -44,6 +44,15 @@
   <p class="sub">Resumen. El detalle, con todos los comandos y la tabla de diagnóstico, está en
     <a href="https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/04-datos-analitica/docs/MANUAL.md">el manual del módulo</a>.</p>
   <ol class="pasos"><li><h3>Decidir el alcance antes de empezar</h3><p>Con acelerador, sin acelerador, o con una base local sin nube. El argumento del módulo <strong>no depende del acelerador</strong>: los tiempos son un adorno valioso, no la tesis.</p></li><li><h3>Desplegar</h3><p>Entre 15 y 25 minutos. Se lanza y se hace otra cosa mientras — por ejemplo, generar los datos.</p></li><li><h3>Generar los datos</h3><p>Tres millones de filas en dos a cuatro minutos. La misma semilla produce siempre los mismos datos, así que la demostración es reproducible.</p></li><li><h3>Abrir el túnel</h3><p>La base no tiene endpoint público: se llega por reenvío de puerto a través del bastión, el mismo patrón del módulo 2.</p></li><li><h3>Cargar y verificar</h3><p><strong>Verificar siempre el conteo:</strong> una importación a medias produce un tablero convincente y equivocado.</p></li><li><h3>Medir y construir el tablero</h3><p>El script detecta solo si hay acelerador. Si no lo hay, lo dice y mide un solo motor; no estima el segundo número.</p></li><li><h3>Mirar el tablero con los ojos</h3><p>Los dos hallazgos deben verse sin esfuerzo. Guardar una copia: es el respaldo, y funciona sin red.</p></li></ol>
+</section>
+
+<section>
+  <h2>Hacerlo a mano, en la consola</h2>
+  <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la
+  consola de Oracle Cloud sin Terraform. Sirve para entender qué hay debajo del código, y
+  para que alguien que nunca ha tocado OCI pueda reproducirlo solo.</p>
+  <p><a href="../manuales/04-datos-analitica.html">Ver el manual de consola</a> ·
+  <a href="../pdf/Manual-Consola-04-Datos.pdf">descargarlo en PDF</a></p>
 </section>
 
 <section>

@@ -31,7 +31,17 @@ variable "ssh_public_key" {
 }
 
 variable "mi_ip_cidr" {
-  description = "Tu IP pública en formato CIDR (ej. 190.x.x.x/32) para el acceso SSH. NUNCA 0.0.0.0/0."
+  description = <<-EOT
+    CIDR desde el que se permite SSH (puerto 22) a las instancias del pool.
+
+    Pon tu IP pública en /32 (`curl -s ifconfig.me`) y nada más.
+
+    En el tenancy de demostración del taller está en 0.0.0.0/0 a propósito, para
+    que el laboratorio no dependa de la red desde la que se muestre. Lo que hace
+    aceptable esa decisión es el ambiente, no el criterio: un tenancy desechable,
+    sin datos y con fecha de destrucción. Copiarla a un ambiente con datos es
+    exactamente el hallazgo alto que el módulo de seguridad enseña a detectar.
+  EOT
   type        = string
 }
 
