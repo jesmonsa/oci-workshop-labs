@@ -95,9 +95,14 @@ while true; do
     done
 
   echo
-  echo "  SIN DATOS no significa que todo esté bien: significa que la alarma no"
-  echo "  aparece en el estado del servicio, es decir, que no está viendo nada."
-  echo "  Es el estado más peligroso, porque se parece a la calma."
+  echo "  SIN DATOS = la alarma existe pero el servicio no reporta estado para ella."
+  echo "  Suele ser una alarma ciega —métrica mal escrita, recurso que ya no existe—,"
+  echo "  y ese es el estado más peligroso, porque se parece a la calma."
+  echo
+  echo "  Pero NO es una prueba de que no lleguen métricas: una alarma recién creada"
+  echo "  también aparece así unos minutos. Para confirmarlo hay que mirar la métrica:"
+  echo "    oci monitoring metric-data summarize-metrics-data --compartment-id <comp> \\"
+  echo "      --namespace oci_computeagent --query-text 'CpuUtilization[1m].mean()'"
   echo
   echo "  Refresco cada ${REFRESCO}s. Ctrl-C para salir."
   sleep "$REFRESCO"
