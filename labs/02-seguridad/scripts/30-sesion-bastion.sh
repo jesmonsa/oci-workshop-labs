@@ -57,7 +57,23 @@ fi
 
 CMD=$(oci bastion session get --session-id "$SESION" \
        --query 'data."ssh-metadata".command' --raw-output)
-CMD="${CMD//<privateKey>/$LLAVE_PRIV}"
+# La ruta de la llave va entre comillas SIMPLES, y se arma en una variable aparte.
+#
+# Dos razones, las dos aprendidas rompiéndolo:
+#   · En Windows el directorio del usuario suele llevar un espacio. Sin comillas,
+#     el comando SSH se parte y falla con «Identity file ... not accessible».
+#   · Las comillas no pueden ser dobles: el ProxyCommand ya viene envuelto en
+#     dobles, y unas dobles dentro lo cierran antes de tiempo. El síntoma es un
+#     desconcertante «remote username contains invalid characters».
+RUTA_LLAVE="'${LLAVE_PRIV}'"
+CMD="${CMD//<privateKey>/${RUTA_LLAVE}}"
+
+# La PRIMERA conexión al bastión pide aceptar su huella, y el salto interno
+# (ProxyCommand) la pide por separado. Frente a un cliente eso son dos pausas
+# incómodas, así que se aceptan automáticamente las huellas nuevas. Sigue
+# avisando si una huella conocida CAMBIA, que es el caso que de verdad importa.
+CMD="${CMD/-W %h:%p/-o StrictHostKeyChecking=accept-new -W %h:%p}"
+CMD="${CMD} -o StrictHostKeyChecking=accept-new"
 [ "$TIPO" = "port-forwarding" ] && CMD="${CMD//<localPort>/2222}"
 
 echo

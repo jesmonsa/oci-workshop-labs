@@ -35,7 +35,7 @@ BITACORA="${AQUI}/../evidencias/tiempos-alarma.md"
 mkdir -p "$(dirname "$BITACORA")"
 
 estado_alarma() {
-  oci monitoring alarm-status list --compartment-id "$COMP" \
+  oci monitoring alarm-status list-alarms-status --compartment-id "$COMP" \
     --query "data[?\"display-name\"=='${ALARMA}'].status | [0]" --raw-output 2>/dev/null || echo "?"
 }
 

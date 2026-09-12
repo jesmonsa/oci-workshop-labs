@@ -40,9 +40,25 @@ PIDS=()
 limpiar() {
   echo
   echo "Deteniendo carga..."
-  for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null || true; done
+  # Matar solo el subshell NO basta: sus curl hijos quedan huérfanos y siguen
+  # generando carga. Medido: tras un Ctrl-C aparentemente limpio, la CPU seguía
+  # al 80 % y el scale-in nunca llegaba. Hay que matar también a los hijos.
+  for p in "${PIDS[@]:-}"; do
+    pkill -P "$p" 2>/dev/null || true
+    kill "$p" 2>/dev/null || true
+  done
+  sleep 1
+  pkill -f "burn\?ms=${MS}" 2>/dev/null || true   # red de seguridad
   wait 2>/dev/null || true
-  echo "Carga detenida $(date '+%H:%M:%S'). El scale-in empieza tras el enfriamiento."
+
+  local vivos
+  vivos=$(pgrep -fc "burn\?ms=${MS}" 2>/dev/null || echo 0)
+  if [ "${vivos:-0}" -gt 0 ]; then
+    echo "AVISO: quedan ${vivos} peticiones vivas. Si el pool no baja, revisar con:"
+    echo "  pgrep -af curl   (y matarlas a mano)"
+  else
+    echo "Carga detenida $(date '+%H:%M:%S'). El scale-in empieza tras el enfriamiento."
+  fi
   exit 0
 }
 trap limpiar INT TERM

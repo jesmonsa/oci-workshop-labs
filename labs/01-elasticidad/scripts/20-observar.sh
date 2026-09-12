@@ -62,9 +62,10 @@ while true; do
 
   echo
   echo " Backends del balanceador:"
-  oci lb backend-health list --load-balancer-id "$LB_ID" --backend-set-name "$BSET" \
-    --query 'data[].{Backend:"name",Estado:"status"}' --output table 2>/dev/null \
-    || echo "   (sin datos todavía)"
+  # El comando es backend-set-health get: «backend-health list» no existe.
+  oci lb backend-set-health get --load-balancer-id "$LB_ID" --backend-set-name "$BSET" \
+    --query 'data.{Estado:status,Total:"total-backend-count",Criticos:"critical-state-backend-names"}' \
+    --output table 2>/dev/null || echo "   (sin datos todavía)"
 
   echo
   echo " Quién responde (5 peticiones seguidas):"

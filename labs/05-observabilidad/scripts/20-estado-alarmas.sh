@@ -33,7 +33,7 @@ while true; do
 
   echo "$ALARMAS" | jq -r '.data[]? | [.id, ."display-name", .severity, (."is-enabled"|tostring)] | @tsv' \
   | while IFS=$'\t' read -r ID NOMBRE SEVERIDAD HABILITADA; do
-      ESTADO=$(oci monitoring alarm-status list --compartment-id "$COMP" \
+      ESTADO=$(oci monitoring alarm-status list-alarms-status --compartment-id "$COMP" \
                 --query "data[?\"alarm-id\"=='$ID'].status | [0]" --raw-output 2>/dev/null || echo "?")
       case "$ESTADO" in
         FIRING)     MARCA=$'\033[31mDISPARADA\033[0m' ;;

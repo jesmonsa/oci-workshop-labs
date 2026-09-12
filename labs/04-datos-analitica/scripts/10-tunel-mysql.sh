@@ -40,7 +40,11 @@ SESION=$(oci bastion session create-port-forwarding \
 
 CMD=$(oci bastion session get --session-id "$SESION" \
        --query 'data."ssh-metadata".command' --raw-output)
-CMD="${CMD//<privateKey>/$LLAVE_PRIV}"
+# La ruta de la llave va entre comillas SIMPLES, armada en una variable aparte:
+# en Windows el directorio del usuario lleva un espacio, y el ProxyCommand ya viene
+# envuelto en comillas dobles, así que unas dobles aquí lo cerrarían antes de tiempo.
+RUTA_LLAVE="'${LLAVE_PRIV}'"
+CMD="${CMD//<privateKey>/${RUTA_LLAVE}}"
 CMD="${CMD//<localPort>/$PUERTO_LOCAL}"
 
 echo

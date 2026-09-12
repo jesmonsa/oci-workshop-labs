@@ -18,3 +18,4 @@ admin_usuario     = "admin"
 
 # El acelerador cuesta aparte. Encender solo tras revisar límites y crédito.
 crear_cluster_heatwave = false
+# shape_heatwave       = "HeatWave.32GB"   # el más pequeño disponible

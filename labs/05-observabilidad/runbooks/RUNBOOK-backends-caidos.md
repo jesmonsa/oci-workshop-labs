@@ -17,7 +17,8 @@
 ## 1. Alcance: 30 segundos
 
 ```bash
-oci lb backend-health list --load-balancer-id "$LB" --backend-set-name "$BSET" --output table
+oci lb backend-set-health get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+  --query 'data.{estado:status,total:"total-backend-count",criticos:"critical-state-backend-names"}'
 ```
 
 | Lo que ves | Qué significa | Urgencia |

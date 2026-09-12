@@ -93,7 +93,10 @@ variable "shape_heatwave" {
   description = <<-EOT
     Shape del nodo de HeatWave. Verificar antes de activarlo:
       oci mysql shape list --compartment-id <compartment> --is-supported-for HEATWAVECLUSTER
+
+    Verificado en us-chicago-1: HeatWave.32GB y HeatWave.512GB. El de 32 GB basta
+    de sobra para el volumen del laboratorio y cuesta bastante menos.
   EOT
   type        = string
-  default     = "HeatWave.512GB"
+  default     = "HeatWave.32GB"
 }

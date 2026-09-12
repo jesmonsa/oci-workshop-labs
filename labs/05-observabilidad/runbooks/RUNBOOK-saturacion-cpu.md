@@ -21,7 +21,8 @@ oci compute-management instance-pool get --instance-pool-id "$POOL" \
   --query 'data.{tamano:size,estado:"lifecycle-state"}'
 
 # ¿El usuario lo está sintiendo?
-oci lb backend-health list --load-balancer-id "$LB" --backend-set-name "$BSET" --output table
+oci lb backend-set-health get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+  --query 'data.{estado:status,total:"total-backend-count",criticos:"critical-state-backend-names"}'
 
 # ¿Es carga real o un solo cliente disparado?
 curl -s "http://$LB/" | head -3

@@ -18,7 +18,8 @@ write_files:
       import os
       import socket
       import time
-      from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+      from http.server import BaseHTTPRequestHandler, HTTPServer
+      from socketserver import ForkingMixIn
       from urllib.parse import urlparse, parse_qs
 
       HOSTNAME = socket.gethostname()
@@ -71,8 +72,18 @@ write_files:
           def log_message(self, *args):
               pass  # sin ruido en el journal durante la demo
 
+      # Servidor que BIFURCA procesos, no hilos. Es deliberado y tiene una razón
+      # medida: con hilos, el bloqueo global del intérprete de Python serializa el
+      # bucle que quema CPU, así que por mucha concurrencia que llegue solo se
+      # ocupa un núcleo. En una instancia de 1 OCPU (2 vCPU) eso pone el techo en
+      # ~50 % de CPU — justo por debajo del umbral de autoescalamiento, y el pool
+      # nunca crece. Con procesos, cada petición quema en su propio núcleo.
+      class ServidorConProcesos(ForkingMixIn, HTTPServer):
+          max_children = 64
+          daemon_threads = True
+
       if __name__ == "__main__":
-          ThreadingHTTPServer(("0.0.0.0", 80), Handler).serve_forever()
+          ServidorConProcesos(("0.0.0.0", 80), Handler).serve_forever()
 
   - path: /etc/systemd/system/lab-app.service
     permissions: "0644"

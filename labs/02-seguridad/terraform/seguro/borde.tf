@@ -109,11 +109,13 @@ resource "oci_waf_web_app_firewall_policy" "app" {
       action_name                = "bloquear-403"
       is_body_inspection_enabled = false
 
+      # Cada capacidad lleva su propia versión: no todas van en la misma, y una
+      # versión equivocada hace fallar el apply entero.
       dynamic "protection_capabilities" {
         for_each = var.waf_capacidades
         content {
-          key     = protection_capabilities.value
-          version = var.waf_version_capacidad
+          key     = protection_capabilities.key
+          version = protection_capabilities.value
         }
       }
     }

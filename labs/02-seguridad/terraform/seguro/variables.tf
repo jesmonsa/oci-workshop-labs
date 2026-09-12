@@ -66,18 +66,23 @@ variable "num_instancias" {
 
 variable "waf_capacidades" {
   description = <<-EOT
-    Llaves de capacidades de protección del WAF (reglas OWASP CRS).
-    941100 = XSS detectado vía libinjection · 942100 = SQL injection vía libinjection.
-    Verificar antes del primer apply:
-      oci waf protection-capability list --compartment-id <tenancy> --key 941100 --all
-  EOT
-  type        = list(string)
-  default     = ["941100", "942100"]
-}
+    Capacidades de protección del WAF (reglas OWASP CRS), como mapa de llave a versión.
 
-variable "waf_version_capacidad" {
-  type    = number
-  default = 1
+    941100 = XSS detectado vía libinjection · 942100 = inyección SQL vía libinjection.
+
+    IMPORTANTE: cada capacidad tiene su propia versión y NO todas van en la misma.
+    Verificar antes del primer apply, una por una:
+
+      oci waf protection-capability list --compartment-id <tenancy> --key 941100 --all \
+        --query 'data.items[].{clave:key,version:version,nombre:"display-name"}' --output table
+
+    Los valores por defecto se comprobaron en us-chicago-1; en otra región pueden diferir.
+  EOT
+  type        = map(number)
+  default = {
+    "941100" = 2
+    "942100" = 1
+  }
 }
 
 variable "waf_bloquear_admin" {

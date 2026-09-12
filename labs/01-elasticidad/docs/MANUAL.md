@@ -370,7 +370,8 @@ oci compute-management instance-pool update --instance-pool-id "$POOL" --size 5 
 oci autoscaling configuration update --auto-scaling-configuration-id "$AS" --is-enabled false --force
 
 # Salud de los backends
-oci lb backend-health list --load-balancer-id "$LB" --backend-set-name "$BSET" --output table
+oci lb backend-set-health get --load-balancer-id "$LB" --backend-set-name "$BSET" \
+  --query 'data.{estado:status,total:"total-backend-count",criticos:"critical-state-backend-names"}'
 ```
 
 > El comando de forzar tamaño es tu red de seguridad. Si a los 90 segundos el

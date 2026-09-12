@@ -3,6 +3,14 @@ resource "oci_core_instance_configuration" "app" {
   display_name   = "${local.prefix}-instance-config"
   freeform_tags  = local.tags
 
+  # Cambiar la aplicación (cloud-init) obliga a reemplazar esta configuración, y el
+  # grupo de instancias la tiene referenciada: sin esto, Terraform intenta borrarla
+  # primero y el borrado falla porque está en uso. Con create_before_destroy crea la
+  # nueva, actualiza el grupo, y solo entonces borra la vieja.
+  lifecycle {
+    create_before_destroy = true
+  }
+
   instance_details {
     instance_type = "compute"
 

@@ -16,7 +16,10 @@ ips_admin_cidr = ["190.0.0.0/32"]
 
 email_alertas = "tu.correo@oracle.com"
 
-# WAF — verificar las llaves antes del primer apply (ver variables.tf)
-waf_capacidades       = ["941100", "942100"]
-waf_version_capacidad = 1
-waf_bloquear_admin    = true
+# WAF — cada capacidad tiene SU PROPIA versión. Verificarlas una por una antes
+# del primer apply (ver variables.tf); en otra región pueden ser distintas.
+waf_capacidades = {
+  "941100" = 2  # XSS
+  "942100" = 1  # inyección SQL
+}
+waf_bloquear_admin = true
