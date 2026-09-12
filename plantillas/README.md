@@ -10,6 +10,7 @@ trabajo sin que nadie las ordene a mano.
 | [Ficha de caso de IA](ficha-caso-ia) | Ocho candidatos puntuados con cuatro criterios ponderados, y una ficha de 18 campos para el que gane. El criterio «datos» pesa 25 % porque es donde fracasan casi todos los casos de IA. |
 | [Blueprint de datos](blueprint-datos) | Inventario de fuentes con dueño, frecuencia y calidad, más un lienzo de seis casillas que empieza por la decisión y no por los datos. Marca en rojo lo que no tiene dueño. |
 | [Matriz de observabilidad](matriz-observabilidad) | 16 señales en 10 categorías. Calcula la cobertura y marca sola toda alarma que despierte a alguien sin tener acción escrita. |
+| [Política de agentes](politica-agentes) | Ocho componentes candidatos. Marca sola dos combinaciones que no deberían existir: una prueba de concepto apuntando a producción, y algo que escribe sin aprobador. |
 
 ## Cómo se generan
 

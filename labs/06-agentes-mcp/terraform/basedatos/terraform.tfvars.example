@@ -1,0 +1,23 @@
+# Copiar a terraform.tfvars y completar. Los OCID son ficticios.
+# La contraseña NO va aquí: exportar TF_VAR_admin_password antes del apply.
+
+compartment_ocid = "ocid1.compartment.oc1..aaaaEJEMPLO"
+region           = "us-ashburn-1"
+
+config_file_profile = "DEFAULT"
+owner               = "equipo-cloud"
+
+# Solo letras y números, máximo 14 caracteres, único en el tenancy.
+db_name = "lab06agentes"
+
+# Nivel siempre gratuito: 1 OCPU, 20 GB, sin consumo de crédito.
+# Si el tenancy ya agotó sus bases gratuitas, poner false.
+usar_nivel_gratuito = true
+
+# Solo aplican cuando usar_nivel_gratuito = false
+# ecpus             = 2
+# almacenamiento_tb = 1
+
+# Lista vacía = cualquier origen, siempre con wallet de mTLS.
+# Para restringir:  ips_permitidas = ["190.0.0.0/32"]
+ips_permitidas = []

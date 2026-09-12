@@ -22,6 +22,7 @@ jobs:
           - labs/02-seguridad/terraform/seguro
           - labs/04-datos-analitica/terraform/heatwave
           - labs/05-observabilidad/terraform/observabilidad
+          - labs/06-agentes-mcp/terraform/basedatos
     defaults:
       run:
         working-directory: ${{ matrix.stack }}

@@ -21,6 +21,7 @@ STACKS=(
   "02-seguridad|labs/02-seguridad/terraform/seguro"
   "04-datos-analitica|labs/04-datos-analitica/terraform/heatwave"
   "05-observabilidad|labs/05-observabilidad/terraform/observabilidad"
+  "06-agentes-mcp|labs/06-agentes-mcp/terraform/basedatos"
 )
 
 command -v zip >/dev/null || { echo "Falta 'zip'."; exit 1; }

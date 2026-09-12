@@ -1,0 +1,120 @@
+title: "Módulo 6 · Base para el laboratorio de agentes"
+description: "Una Autonomous Database con mTLS obligatorio, sin red que mantener. Con el nivel siempre gratuito activado no consume crédito. Es lo único que este módulo despliega: el resto ocurre en tu equipo."
+schemaVersion: 1.1.0
+version: "20260101"
+locale: "en"
+
+variableGroups:
+  - title: "Ubicación"
+    variables: ["compartment_ocid", "owner"]
+  - title: "Base de datos"
+    variables: ["db_name", "admin_password", "usar_nivel_gratuito"]
+  - title: "Tamaño (solo si no se usa el nivel gratuito)"
+    variables: ["ecpus", "almacenamiento_tb"]
+  - title: "Acceso"
+    variables: ["ips_permitidas"]
+  - title: "Resource Manager las provee"
+    visible: false
+    variables: ["region", "config_file_profile"]
+
+variables:
+  region:
+    type: oci:identity:region:name
+    title: "Región"
+    required: true
+  config_file_profile:
+    type: string
+    title: "Perfil local"
+    default: ""
+    description: "Se deja vacío en Resource Manager. Solo aplica al ejecutar Terraform desde un equipo."
+
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    description: "Usar uno dedicado al laboratorio: facilita borrarlo todo al terminar."
+    required: true
+  owner:
+    type: string
+    title: "Responsable"
+    description: "Va en las etiquetas del recurso."
+    default: "equipo-cloud"
+
+  db_name:
+    type: string
+    title: "Nombre de la base"
+    description: "Solo letras y números, máximo 14 caracteres, único en el tenancy y la región."
+    default: "lab06agentes"
+    required: true
+    pattern: "^[A-Za-z][A-Za-z0-9]{0,13}$"
+  admin_password:
+    type: password
+    title: "Contraseña de ADMIN"
+    description: "Entre 12 y 30 caracteres, con mayúscula, minúscula y número. Sin comillas dobles ni la palabra «admin»."
+    required: true
+    confirmation: true
+    minLength: 12
+    maxLength: 30
+  usar_nivel_gratuito:
+    type: boolean
+    title: "Usar el nivel siempre gratuito"
+    description: "1 OCPU y 20 GB, sin consumo de crédito. Suficiente de sobra para este laboratorio. Si el tenancy ya agotó sus bases gratuitas, desactivarlo."
+    default: true
+
+  ecpus:
+    type: integer
+    title: "ECPUs"
+    default: 2
+    minimum: 2
+    maximum: 128
+    visible:
+      eq: ["usar_nivel_gratuito", false]
+  almacenamiento_tb:
+    type: integer
+    title: "Almacenamiento (TB)"
+    default: 1
+    minimum: 1
+    maximum: 128
+    visible:
+      eq: ["usar_nivel_gratuito", false]
+
+  ips_permitidas:
+    type: array
+    title: "IPs o redes permitidas"
+    description: "Vacío = se acepta desde cualquier origen, siempre exigiendo el wallet de mTLS. Restringirlo es una segunda capa: mTLS autentica, esta lista reduce quién puede intentarlo."
+    items:
+      type: string
+    default: []
+
+outputGroups:
+  - title: "Qué hacer ahora"
+    outputs: ["siguiente_paso", "adb_ocid", "consola_del_servicio"]
+  - title: "Detalles"
+    outputs: ["db_name", "estado", "nivel_gratuito", "servicios_de_conexion"]
+
+outputs:
+  siguiente_paso:
+    type: string
+    title: "Siguiente paso"
+    visible: true
+  adb_ocid:
+    type: string
+    title: "OCID de la base"
+    description: "Lo necesitan los scripts para descargar el wallet."
+    visible: true
+  consola_del_servicio:
+    type: link
+    title: "Consola de la base"
+    displayText: "Abrir"
+    visible: true
+  db_name:
+    type: string
+    title: "Nombre"
+  estado:
+    type: string
+    title: "Estado"
+  nivel_gratuito:
+    type: string
+    title: "¿Nivel siempre gratuito?"
+  servicios_de_conexion:
+    type: string
+    title: "Servicios disponibles"
