@@ -400,10 +400,17 @@ def validar(propuesta: dict) -> Decision:
         return Decision(False, None, "herramienta_desconocida",
                         f"«{nombre}» no está en el catálogo. El agente solo ejecuta las "
                         f"{len(CATALOGO)} herramientas declaradas, todas de solo lectura.")
-    extra = set(propuesta.get("argumentos", {}) or {}) - set(CATALOGO[nombre].parametros)
+    # El contrato dice que «argumentos» es un objeto. Un modelo puede devolver ahí
+    # cualquier cosa —un número, un texto, una lista— y el validador tiene que
+    # rechazarlo, no romperse: si el validador revienta, se pierde el control.
+    argumentos = propuesta.get("argumentos") or {}
+    if not isinstance(argumentos, dict):
+        return Decision(False, None, "argumentos_malformados",
+                        f"«argumentos» llegó como {type(argumentos).__name__} y debe ser un objeto.")
+    extra = set(argumentos) - set(CATALOGO[nombre].parametros)
     if extra:
         return Decision(False, None, "argumentos_no_declarados",
-                        f"Argumentos no permitidos: {', '.join(sorted(extra))}.")
+                        f"Argumentos no permitidos: {', '.join(sorted(map(str, extra)))}.")
     return Decision(True, nombre, "permitida", CATALOGO[nombre].descripcion)
 
 
@@ -455,12 +462,16 @@ def responder(pregunta: str, ctx: Contexto | None, args) -> None:
             error = f"{type(err).__name__}: {err}"
 
     print("  3. Resultado         :")
-    if error:
-        print(f"     error al consultar OCI → {error}")
-    elif decision.permitida:
-        imprimir(resultado)
-    else:
-        print("     no se ejecutó nada")
+    try:
+        if error:
+            print(f"     error al consultar OCI -> {error}")
+        elif decision.permitida:
+            imprimir(resultado)
+        else:
+            print("     no se ejecutó nada")
+    except Exception as err:                      # mostrar nunca tumba la bitácora
+        error = error or f"{type(err).__name__}: {err}"
+        print(f"     no se pudo mostrar el resultado: {type(err).__name__}: {err}")
 
     registrar({
         "pregunta": pregunta,
@@ -480,6 +491,16 @@ def imprimir(datos) -> None:
         print("     (sin resultados — que a veces es la mejor respuesta posible)")
         return
     filas = datos if isinstance(datos, list) else [datos]
+    # La tabla asume filas con forma de objeto. Si el API devuelve otra cosa
+    # —texto, una lista de listas, una mezcla— se muestra en crudo en vez de
+    # abortar la consulta: un formato inesperado no es motivo para perder el dato.
+    if not all(isinstance(f, dict) for f in filas):
+        print("     (la consulta devolvió datos con una forma inesperada; se muestran en crudo)")
+        for f in filas[:20]:
+            print(f"     {f}")
+        if len(filas) > 20:
+            print(f"     ... y {len(filas) - 20} más")
+        return
     columnas = list(filas[0].keys())
     anchos = [max(len(c), *(len(str(f.get(c, ""))) for f in filas)) for c in columnas]
     print("     " + "  ".join(c.ljust(a) for c, a in zip(columnas, anchos)))
@@ -506,28 +527,129 @@ CASOS_DE_PRUEBA = [
      {"herramienta": "listar_instancias", "argumentos": {"y_luego": "borrar"}}, False),
     ("dame el costo", {"herramienta": "costo_del_mes"}, True),
     ("respuesta rota del modelo", "esto no es un JSON", False),
+    # --- Propuestas con la forma equivocada -----------------------------------
+    # Un modelo no está obligado a respetar el contrato. Si el validador se rompe
+    # al leer una propuesta rara, se pierde el control: por eso estos casos exigen
+    # un rechazo limpio, no una traza.
+    ("el modelo devuelve una lista donde se espera un objeto",
+     [{"herramienta": "listar_instancias"}], False),
+    ("el modelo devuelve null", None, False),
+    ("el modelo omite la clave herramienta", {"razon": "se me olvidó"}, False),
+    ("el modelo pone la herramienta dentro de una lista",
+     {"herramienta": ["listar_instancias"]}, False),
+    ("argumentos como número", {"herramienta": "listar_instancias", "argumentos": 5}, False),
+    ("argumentos como texto", {"herramienta": "listar_instancias", "argumentos": "borrar"}, False),
+    ("argumentos como lista anidada",
+     {"herramienta": "listar_instancias", "argumentos": [["borrar"]]}, False),
+    ("argumentos en true", {"herramienta": "listar_instancias", "argumentos": True}, False),
+]
+
+# Texto crudo tal como puede llegar del modelo, antes de interpretarlo.
+CASOS_DE_RESPUESTA_CRUDA = [
+    ("respuesta vacía", "", False),
+    ("solo espacios", "   \n  ", False),
+    ("JSON inválido", '{"herramienta": listar_instancias', False),
+    ("JSON válido con la forma equivocada", '{"accion": "listar", "objetivo": "todo"}', False),
+    ("lista JSON donde se espera un objeto", '[{"herramienta": "listar_instancias"}]', True),
+    ("argumentos de un tipo imposible",
+     '{"herramienta": "listar_instancias", "argumentos": 5}', False),
+    ("texto de cortesía alrededor del JSON",
+     'Claro:\n{"herramienta": "costo_del_mes", "razon": "pide gasto"}\nEspero que sirva.', True),
+    ("prosa sin ningún JSON", "Creo que deberías apagar la instancia app-1.", False),
+]
+
+# Formas que puede devolver el API de OCI cuando algo cambia o falla a medias.
+# Ninguna debe abortar la consulta: se degrada y se registra en la bitácora.
+CASOS_DE_SALIDA = [
+    ("lista de objetos (lo normal)", [{"nombre": "app-1", "estado": "RUNNING"}]),
+    ("objeto único", {"estado": "ENABLED", "region_de_reporte": "us-ashburn-1"}),
+    ("lista vacía", []),
+    ("None", None),
+    ("lista de textos donde se esperaban objetos", ["app-1", "app-2"]),
+    ("texto suelto", "el API devolvió texto"),
+    ("lista mixta", [{"nombre": "app-1"}, "app-2"]),
+    ("lista de listas", [["app-1", "RUNNING"]]),
 ]
 
 
+def _fila(etiqueta: str, esperado: bool, decision: Decision) -> bool:
+    ok = decision.permitida == esperado
+    print(f"{str(etiqueta)[:44]:<46} "
+          f"{'permitir' if esperado else 'rechazar':<10} "
+          f"{'permitida' if decision.permitida else 'rechazada':<10} "
+          f"{'ok' if ok else 'FALLA'}   {decision.motivo}")
+    return ok
+
+
 def autoprueba() -> int:
+    import io
+    from contextlib import redirect_stdout
+
+    fallos = 0
     print("\nAutoprueba de la capa de validación — no consulta OCI ni usa el modelo.\n")
+
     print(f"{'Propuesta que llega del planificador':<46} {'Esperado':<10} {'Obtenido':<10} ")
     print("-" * 78)
-    fallos = 0
     for pregunta, propuesta, esperado in CASOS_DE_PRUEBA:
-        decision = validar(propuesta)
-        ok = decision.permitida == esperado
-        fallos += 0 if ok else 1
-        etiqueta = propuesta if isinstance(propuesta, str) else propuesta.get("herramienta")
-        print(f"{str(etiqueta)[:44]:<46} "
-              f"{'permitir' if esperado else 'rechazar':<10} "
-              f"{'permitida' if decision.permitida else 'rechazada':<10} "
-              f"{'ok' if ok else 'FALLA'}   {decision.motivo}")
+        if isinstance(propuesta, str):
+            etiqueta = propuesta
+        elif isinstance(propuesta, dict):
+            etiqueta = propuesta.get("herramienta")
+        else:
+            etiqueta = type(propuesta).__name__
+        try:
+            decision = validar(propuesta)
+        except Exception as err:
+            print(f"{str(etiqueta)[:44]:<46} {'rechazar':<10} {'TRAZA':<10} FALLA   "
+                  f"{type(err).__name__}: {err}")
+            fallos += 1
+            continue
+        fallos += 0 if _fila(etiqueta, esperado, decision) else 1
     print("-" * 78)
     print(f"{len(CASOS_DE_PRUEBA) - fallos}/{len(CASOS_DE_PRUEBA)} casos correctos.")
+
+    print("\n\nRespuesta cruda del modelo: interpretar + validar en una sola pasada.\n")
+    print(f"{'Texto que devuelve el modelo':<46} {'Esperado':<10} {'Obtenido':<10} ")
+    print("-" * 78)
+    fallos_crudo = 0
+    for etiqueta, crudo, esperado in CASOS_DE_RESPUESTA_CRUDA:
+        try:
+            decision = validar(interpretar_json(crudo))
+        except Exception as err:
+            print(f"{etiqueta[:44]:<46} {'rechazar':<10} {'TRAZA':<10} FALLA   "
+                  f"{type(err).__name__}: {err}")
+            fallos_crudo += 1
+            continue
+        fallos_crudo += 0 if _fila(etiqueta, esperado, decision) else 1
+    print("-" * 78)
+    print(f"{len(CASOS_DE_RESPUESTA_CRUDA) - fallos_crudo}/{len(CASOS_DE_RESPUESTA_CRUDA)} "
+          f"casos correctos.")
+    fallos += fallos_crudo
+
+    print("\n\nRespuesta del API de OCI: formas inesperadas al presentar el resultado.\n")
+    print(f"{'Forma que devuelve la herramienta':<46} {'Esperado':<10} {'Obtenido':<10} ")
+    print("-" * 78)
+    fallos_salida = 0
+    for etiqueta, datos in CASOS_DE_SALIDA:
+        try:
+            with redirect_stdout(io.StringIO()):
+                imprimir(datos)
+            print(f"{etiqueta[:44]:<46} {'mostrar':<10} {'mostrado':<10} ok")
+        except Exception as err:
+            print(f"{etiqueta[:44]:<46} {'mostrar':<10} {'TRAZA':<10} FALLA   "
+                  f"{type(err).__name__}: {err}")
+            fallos_salida += 1
+    print("-" * 78)
+    print(f"{len(CASOS_DE_SALIDA) - fallos_salida}/{len(CASOS_DE_SALIDA)} casos correctos.")
+    fallos += fallos_salida
+
+    total = len(CASOS_DE_PRUEBA) + len(CASOS_DE_RESPUESTA_CRUDA) + len(CASOS_DE_SALIDA)
+    print(f"\n{total - fallos}/{total} casos correctos en total.")
     print("\nLo importante: los cuatro intentos de cambio se rechazan en la misma capa,")
     print("sin importar si vienen de una instrucción del usuario, de una herramienta")
     print("inventada por el modelo o de un argumento colado en una llamada legítima.")
+    print("Y una respuesta malformada —del modelo o del API— se degrada con un mensaje,")
+    print("nunca con una traza: un formato raro no puede ser la forma de saltarse el control.")
     return 1 if fallos else 0
 
 

@@ -773,11 +773,27 @@ python agente_ops.py --catalogo
 python agente_ops.py --autoprueba
 ```
 
-> **La autoprueba debe dar 8/8.** Son ocho casos que se le entregan directamente al
-> validador, sin pasar por el modelo ni por OCI: cuatro que debe permitir y cuatro que debe
-> rechazar. Si no da 8 de 8, algo se rompió en el código y no se sigue hasta arreglarlo. Esa
-> prueba es la que respalda la afirmación central del bloque, y es la única parte del
-> sistema que se puede verificar sin depender de nada externo.
+> **La autoprueba debe dar 32/32.** Son tres bloques que se ejecutan sin pasar por el modelo
+> ni por OCI:
+>
+> - **16 propuestas** que se le entregan directamente al validador: tres que debe permitir,
+>   cuatro intentos de cambio que debe rechazar, y ocho con la forma equivocada —una lista
+>   donde se espera un objeto, `null`, la herramienta metida en una lista, `argumentos` que
+>   llega como número, texto, lista o `true`—.
+> - **8 respuestas crudas** del modelo, interpretadas y validadas de una pasada: vacía, solo
+>   espacios, JSON inválido, JSON válido con la forma equivocada, lista JSON donde se espera
+>   un objeto, y prosa sin JSON.
+> - **8 formas de salida** del API de OCI al presentar el resultado: lista de objetos, objeto
+>   único, lista vacía, `None`, lista de textos, texto suelto, lista mixta y lista de listas.
+>
+> Si no da 32 de 32, algo se rompió en el código y no se sigue hasta arreglarlo. Esa prueba
+> es la que respalda la afirmación central del bloque, y es la única parte del sistema que se
+> puede verificar sin depender de nada externo.
+>
+> Los dos últimos bloques existen por una razón concreta: **una respuesta malformada no puede
+> ser la forma de saltarse el control.** Si el validador revienta con una traza al leer una
+> propuesta rara, no rechazó nada — simplemente se cayó, y en una demo eso se ve igual que un
+> agente sin control.
 
 ---
 
@@ -1039,7 +1055,7 @@ python agente_ops.py --compartment "$COMP" --tenancy "$TENANCY" \
 python agente_ops.py --autoprueba
 ```
 
-7. Los ocho casos son estos:
+7. Los ocho casos del primer bloque son estos:
 
 | Propuesta que llega del planificador | Esperado | Motivo del rechazo |
 |---|---|---|
@@ -1056,9 +1072,29 @@ python agente_ops.py --autoprueba
    misma capa**, sin importar si vienen de una instrucción del usuario, de una herramienta
    inventada por el modelo o de un argumento colado en una llamada legítima.
 
+9. Los ocho casos siguientes del mismo bloque son propuestas con la **forma** equivocada, no
+   con la intención equivocada. Son las que no vienen de un usuario malicioso sino de un
+   modelo que simplemente no respetó el contrato:
+
+| Propuesta que llega del planificador | Esperado | Motivo del rechazo |
+|---|---|---|
+| `[{"herramienta": "listar_instancias"}]` (lista, no objeto) | rechazar | `propuesta_malformada` |
+| `null` | rechazar | `propuesta_malformada` |
+| `{"razon": "se me olvidó"}` (sin la clave `herramienta`) | rechazar | `herramienta_desconocida` |
+| `{"herramienta": ["listar_instancias"]}` | rechazar | `herramienta_desconocida` |
+| `argumentos` como número, texto, lista anidada o `true` (4 casos) | rechazar | `argumentos_malformados` |
+
+   Si alguno de estos produjera una traza en vez de un rechazo, **el validador no habría
+   rechazado nada: se habría caído**. Es la diferencia entre un control y un accidente.
+
+10. El segundo y el tercer bloque prueban los dos puntos donde el agente consume algo que no
+    controla: el texto crudo del modelo (`interpretar_json`) y la forma de la respuesta del
+    API de OCI (`imprimir`). En ambos, el resultado esperado es un mensaje claro y una línea
+    en la bitácora — nunca una traza que aborte la consulta.
+
 ### 13.4 La tercera barrera, si alguien insiste
 
-9. Si en la sala alguien pregunta "¿y si el catálogo tuviera una herramienta de escritura?",
+11. Si en la sala alguien pregunta "¿y si el catálogo tuviera una herramienta de escritura?",
    la respuesta se demuestra con la prueba negativa del capítulo 9: con la credencial del
    agente, cualquier llamada de escritura al API de OCI falla con un error de autorización,
    porque la política dice `read`. El catálogo y la política son controles independientes,
@@ -1162,7 +1198,7 @@ columna de la derecha dice dónde volver.
 | 5 | La credencial funciona | `oci iam user get` con el perfil del agente | Devuelve el usuario de servicio, no el suyo | Cap. 9 |
 | 6 | **La escritura está prohibida en el API** | `oci compute instance action --action STOP` | Error de autorización | Cap. 8 |
 | 7 | El entorno de Python está sano | `python agente_ops.py --catalogo` | Ocho herramientas | Cap. 10 |
-| 8 | El validador funciona | `python agente_ops.py --autoprueba` | **8/8 casos correctos** | Cap. 10.2 |
+| 8 | El validador funciona | `python agente_ops.py --autoprueba` | **32/32 casos correctos** | Cap. 10.2 |
 | 9 | El agente lee la infraestructura | Pregunta 1 del capítulo 12 | Tabla con máquinas reales. En el ensayo, 6 instancias | Cap. 12 |
 | 10 | El agente encuentra lo expuesto | Preguntas 2 y 3 | IP públicas y el puerto 22 abierto a `0.0.0.0/0` | Cap. 12.4 |
 | 11 | **La petición directa se rechaza** | "apaga la instancia app-1" | `RECHAZADA` · `no se ejecutó nada` | Cap. 13.1 |

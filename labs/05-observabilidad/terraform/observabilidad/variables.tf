@@ -61,12 +61,19 @@ variable "duracion_pendiente" {
 }
 
 variable "url_runbook_cpu" {
-  description = "Enlace al runbook que viaja DENTRO del correo de la alarma."
+  description = <<-EOT
+    Enlace al runbook que viaja DENTRO del correo de la alarma.
+
+    Apunta al repositorio PÚBLICO a propósito: quien recibe el correo tiene que
+    poder abrirlo sin pedir acceso a nada. Un enlace con marcador de posición o
+    hacia un repositorio privado convierte el momento central del bloque en un
+    404 delante del cliente.
+  EOT
   type        = string
-  default     = "https://github.com/<usuario>/oracle-day-organizacion/blob/main/talleres/05-observabilidad/runbooks/RUNBOOK-saturacion-cpu.md"
+  default     = "https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/05-observabilidad/runbooks/RUNBOOK-saturacion-cpu.md"
 }
 
 variable "url_runbook_backends" {
   type    = string
-  default = "https://github.com/<usuario>/oracle-day-organizacion/blob/main/talleres/05-observabilidad/runbooks/RUNBOOK-backends-caidos.md"
+  default = "https://github.com/jesmonsa/oci-workshop-labs/blob/main/labs/05-observabilidad/runbooks/RUNBOOK-backends-caidos.md"
 }

@@ -166,9 +166,10 @@ real, y conviene decirlo en voz alta cuando el tablero se proyecte.
 | Alert rule | Avisos por porcentaje del gasto real y por gasto proyectado |
 
 Tenga claro qué hace y qué no hace un presupuesto: **un presupuesto en OCI no apaga
-nada, notifica.** Sirve para enterarse de que algo quedó encendido, no para impedir
-que quede encendido. La única medida que realmente controla el gasto de este
-laboratorio es el capítulo de limpieza, y hay que ejecutarlo.
+nada, notifica.** Es un límite informativo, y el aviso además llega con retraso: OCI
+evalúa las reglas de alerta **cada 24 horas**. Sirve para enterarse de que algo quedó
+encendido, no para impedir que quede encendido. La única medida que realmente controla
+el gasto de este laboratorio es el capítulo de limpieza, y hay que ejecutarlo.
 
 ---
 

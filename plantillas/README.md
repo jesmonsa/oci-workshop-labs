@@ -11,6 +11,7 @@ trabajo sin que nadie las ordene a mano.
 | [Blueprint de datos](blueprint-datos) | Inventario de fuentes con dueño, frecuencia y calidad, más un lienzo de seis casillas que empieza por la decisión y no por los datos. Marca en rojo lo que no tiene dueño. |
 | [Matriz de observabilidad](matriz-observabilidad) | 16 señales en 10 categorías. Calcula la cobertura y marca sola toda alarma que despierte a alguien sin tener acción escrita. |
 | [Política de agentes](politica-agentes) | Ocho componentes candidatos. Marca sola dos combinaciones que no deberían existir: una prueba de concepto apuntando a producción, y algo que escribe sin aprobador. |
+| [Hoja de ruta de 90 días](hoja-de-ruta) | Destila las cuatro salidas anteriores en dos iniciativas con dueño, fecha y métrica. Declara <strong>no ejecutable</strong> cualquier línea sin dueño, sin fecha o sin valor objetivo: una línea sin eso es un deseo, no un compromiso. |
 
 ## Cómo se generan
 

@@ -101,7 +101,9 @@ terraform apply
 ```
 
 Esta pantalla se muestra en la demo. Es el ejemplo más barato de FinOps que existe:
-un control que se activa en cinco minutos y avisa antes de que el gasto ocurra.
+un control que se activa en cinco minutos. **Avisa, no corta** — nada se apaga solo al
+cruzar un umbral, y OCI evalúa las alertas cada 24 horas. Sirve para no perder el crédito
+del mes, no para frenar un error de esta tarde.
 
 ---
 
@@ -120,9 +122,15 @@ curl -s ifconfig.me      # tu IP        -> mi_ip_cidr (agregar /32)
 
 Edita `terraform.tfvars` con tus OCIDs, región, llave e IP.
 
-> **`mi_ip_cidr` no debe quedar en `0.0.0.0/0`.** Un laboratorio con SSH abierto al
-> mundo, mostrado en una sesión donde el siguiente bloque es de seguridad, es un
-> autogol. Y en un trial nuevo los escaneos empiezan en minutos.
+> **Pon tu IP en `/32`, no `0.0.0.0/0`.** En un trial nuevo los escaneos empiezan en
+> minutos, y un laboratorio con SSH abierto al mundo es justo el hallazgo alto que el
+> bloque de seguridad enseña a detectar.
+>
+> *En el tenancy de demostración de esta jornada sí está en `0.0.0.0/0`, y se dice en
+> voz alta cuando alguien lo pregunta: el laboratorio se muestra desde salas y redes
+> distintas, y la decisión es aceptable ahí por el ambiente —desechable, sin datos,
+> con fecha de destrucción—, no por el criterio. Ver `docs/REGLAS-DE-JUEGO.md`,
+> regla 6.*
 
 ### 1.2 Aplicar
 

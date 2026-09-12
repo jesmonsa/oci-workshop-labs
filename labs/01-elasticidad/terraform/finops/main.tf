@@ -17,10 +17,15 @@ provider "oci" {
 # Guardarraíles de costo del SE Trial.
 #
 # Se aplica ANTES de crear cualquier recurso, por dos razones:
-#   1. Protege el crédito del trial, que es finito y se acaba solo.
+#   1. Vigila el crédito del trial, que es finito y se acaba solo.
 #   2. El propio presupuesto es material de demostración: en el bloque se muestra
 #      esta pantalla como el primer control de FinOps que cualquiera puede activar
 #      el mismo día, sin proyecto y sin herramienta adicional.
+#
+# Alcance, para no prometer de más: un presupuesto de OCI AVISA, no corta. Es un
+# límite informativo; nada se apaga al cruzar un umbral, y las reglas de alerta se
+# evalúan cada 24 horas. El teardown diario sigue siendo el control que de verdad
+# frena el gasto.
 # ---------------------------------------------------------------------------
 
 variable "tenancy_ocid" { type = string }

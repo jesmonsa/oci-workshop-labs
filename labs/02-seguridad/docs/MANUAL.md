@@ -95,8 +95,20 @@ for k in 941100 942100; do
 done
 ```
 
-Si ambas aparecen, sigue. Si alguna no aparece o la versión no es 1, ajusta
-`waf_capacidades` y `waf_version_capacidad` en `terraform.tfvars`. Para explorar:
+Fíjate en la columna `version`: **cada capacidad lleva la suya**. En us-chicago-1,
+941100 va en la versión 2 y 942100 en la 1. Por eso `waf_capacidades` es un mapa de
+llave a versión y no una lista:
+
+```hcl
+waf_capacidades = {
+  "941100" = 2
+  "942100" = 1
+}
+```
+
+Si en tu región las versiones son otras, ajusta el mapa en `terraform.tfvars`.
+No existe ninguna variable `waf_version_capacidad`: una sola versión para las dos
+reglas es precisamente el error que hace fallar el apply. Para explorar:
 
 ```bash
 oci waf protection-capability list --compartment-id "$TENANCY" --all \

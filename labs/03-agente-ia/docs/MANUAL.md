@@ -18,11 +18,13 @@ Verificación sin credenciales y sin modelo:
 
 ```bash
 python agente_ops.py --catalogo      # las 8 herramientas
-python agente_ops.py --autoprueba    # 8/8 casos de la capa de validación
+python agente_ops.py --autoprueba    # 32/32 casos de la capa de validación
 ```
 
-Si `--autoprueba` no da 8/8, algo se rompió en el código: no sigas hasta arreglarlo. Esa
-prueba es la que respalda la afirmación central del bloque.
+Si `--autoprueba` no da 32/32, algo se rompió en el código: no sigas hasta arreglarlo. Esa
+prueba es la que respalda la afirmación central del bloque. Son tres bloques: 16 propuestas
+que se le entregan al validador, 8 respuestas crudas del modelo (vacía, JSON inválido, JSON
+con la forma equivocada) y 8 formas de salida del API de OCI.
 
 ---
 
@@ -130,7 +132,9 @@ que copia el contenido consultado se convierte ella misma en un problema de segu
 
 ## Paso 6 · Correrlo contra el tenancy de la organización (después del taller)
 
-Esto es lo que se les ofrece como siguiente paso. Requiere un usuario de **solo lectura**:
+Esto es lo que se les ofrece como siguiente paso. Requiere un usuario de **solo lectura**.
+
+**Bloque 1 — acotado al compartimento del cliente:**
 
 ```text
 Allow group AgenteLectura to inspect all-resources in compartment <el-suyo>
@@ -140,8 +144,62 @@ Allow group AgenteLectura to read object-family in compartment <el-suyo>
 Allow group AgenteLectura to read load-balancers in compartment <el-suyo>
 ```
 
-El agente nunca necesita más que eso. Si alguien propone darle `manage` para "que después
-pueda hacer más cosas", esa es exactamente la conversación que el bloque busca provocar.
+**Bloque 2 — lo que obliga a subir a la raíz del tenancy, y el acceso al modelo:**
+
+```text
+Allow group AgenteLectura to read objectstorage-namespaces in tenancy
+Allow group AgenteLectura to read cloud-guard-family in tenancy
+Allow group AgenteLectura to read usage-report in tenancy
+Allow group AgenteLectura to use generative-ai-family in compartment <el-de-genai>
+```
+
+> **El bloque 2 no es opcional, y conviene decirlo antes de la reunión.** Con las cinco
+> sentencias del bloque 1 el agente arranca, pero **cuatro de sus ocho herramientas fallan**
+> con un error de autorización: `buckets_publicos` (necesita el espacio de nombres del
+> tenancy), `estado_cloud_guard`, `problemas_cloud_guard` y `costo_del_mes`. Y sin la última
+> sentencia **no arranca el planificador**: el agente cae al modo `--sin-llm`.
+>
+> Las tres primeras del bloque 2 van **en la raíz del tenancy**, no en el compartimento del
+> cliente: Cloud Guard, el consumo y el espacio de nombres de Object Storage son recursos del
+> tenancy y no se pueden acotar a un compartimento. Eso implica una conversación con quien
+> administre el tenancy, no solo con el dueño del compartimento — mejor tenerla antes que
+> descubrirla en la demo.
+
+### Qué llamada habilita cada sentencia
+
+La correspondencia entre el catálogo y la política, herramienta por herramienta. Es la tabla
+que hay que poder mostrar si alguien pregunta por qué se pide cada permiso.
+
+| Herramienta del agente | Llamada al API de OCI | Sentencia que la habilita | Alcance |
+|---|---|---|---|
+| `listar_instancias` | `ComputeClient.list_instances` | `read instance-family` | compartimento |
+| `instancias_con_ip_publica` | `list_instances`, `list_vnic_attachments` | `read instance-family` | compartimento |
+| `instancias_con_ip_publica` | `VirtualNetworkClient.get_vnic` | `read virtual-network-family` | compartimento |
+| `reglas_abiertas_a_internet` | `VirtualNetworkClient.list_security_lists` | `read virtual-network-family` | compartimento |
+| `buckets_publicos` | `ObjectStorageClient.get_namespace` | `read objectstorage-namespaces` | **tenancy** |
+| `buckets_publicos` | `list_buckets`, `get_bucket` | `read object-family` | compartimento |
+| `salud_balanceadores` | `list_load_balancers`, `get_backend_set_health` | `read load-balancers` | compartimento |
+| `estado_cloud_guard` | `CloudGuardClient.get_configuration` | `read cloud-guard-family` | **tenancy** |
+| `problemas_cloud_guard` | `CloudGuardClient.list_problems` | `read cloud-guard-family` | **tenancy** |
+| `costo_del_mes` | `UsageapiClient.request_summarized_usages` | `read usage-report` | **tenancy** |
+| El planificador | `GenerativeAiClient.list_models` | `use generative-ai-family` | compartimento de GenAI |
+| El planificador | `GenerativeAiInferenceClient.chat` | `use generative-ai-family` | compartimento de GenAI |
+
+Dos notas sobre la tabla:
+
+- `use generative-ai-family` cubre las dos llamadas del planificador: en la escalera de
+  verbos de OCI, `use` incluye lo que permiten `read` e `inspect`, y `list_models` es una
+  lectura. No hace falta una sentencia aparte para descubrir el modelo.
+- `problemas_cloud_guard` consulta con `compartment_id_in_subtree=True` desde la raíz: por
+  eso la sentencia de Cloud Guard tiene que estar en el tenancy aunque el resto del agente
+  esté acotado a un compartimento.
+- La sentencia de consumo usa `usage-report`; si la herramienta de costo devuelve un error
+  de autorización, hay que revisar la referencia de políticas del servicio de facturación y
+  ajustar el tipo de recurso. `[VALIDAR]`
+
+El agente nunca necesita más que eso: **nueve sentencias, ninguna con `manage`, ninguna con
+`use` sobre infraestructura.** Si alguien propone darle `manage` para "que después pueda
+hacer más cosas", esa es exactamente la conversación que el bloque busca provocar.
 
 ---
 

@@ -12,7 +12,7 @@ variableGroups:
   - title: "Cómputo"
     variables: ["shape", "ocpus", "memory_in_gbs", "num_instancias"]
   - title: "WAF"
-    variables: ["waf_capacidades", "waf_version_capacidad", "waf_bloquear_admin"]
+    variables: ["waf_bloquear_admin"]
   - title: "Alertas"
     variables: ["email_alertas"]
   - title: "Resource Manager las provee"
@@ -90,19 +90,18 @@ variables:
     minimum: 1
     maximum: 5
 
-  waf_capacidades:
-    type: array
-    title: "Reglas de protección del WAF"
-    description: "941100 = XSS · 942100 = inyección SQL. Verificar que existan en la región antes de desplegar: oci waf protection-capability list --compartment-id <tenancy> --key 941100"
-    items:
-      type: string
-    default: ["941100", "942100"]
-  waf_version_capacidad:
-    type: integer
-    title: "Versión de las reglas"
-    default: 1
-    minimum: 1
-    maximum: 10
+  # Las reglas del WAF NO salen en el formulario, y es a propósito.
+  #
+  # En Terraform son un mapa de llave a versión (941100 va en la versión 2 y
+  # 942100 en la 1: cada capacidad lleva la suya). Los formularios de Resource
+  # Manager no saben representar un mapa, así que cualquier intento de exponerlo
+  # aquí produce un tipo que Terraform rechaza al aplicar. Sin la variable en el
+  # formulario, Resource Manager usa el valor por defecto del módulo, que está
+  # verificado contra us-chicago-1.
+  #
+  # Para otra región: clonar el repositorio y ajustar `waf_capacidades` en
+  # terraform.tfvars, después de comprobar las versiones una por una con
+  #   oci waf protection-capability list --compartment-id <tenancy> --key 941100
   waf_bloquear_admin:
     type: boolean
     title: "Bloquear la ruta /admin"

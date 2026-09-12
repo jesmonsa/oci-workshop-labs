@@ -55,8 +55,11 @@ Los cinco primeros no son laboratorios sueltos: el orden es el argumento.
 ```
 
 El módulo 5 cierra el círculo: la métrica que en el módulo 1 disparaba el
-autoescalamiento se convierte en una alarma **y el autoescalamiento la apaga en vivo**.
-Esa es la lección más difícil del tema y aquí ocurre sola.
+autoescalamiento se convierte en una alarma con umbral, dueño y acción escrita. Y deja
+ver algo que casi nadie espera: **el grupo crece hasta su máximo y la alarma sigue
+sonando.** Más capacidad no baja la utilización, sube el rendimiento — la alarma de
+saturación se apaga cuando baja la demanda, no cuando llega capacidad. Esa es la
+lección más difícil del tema, y el laboratorio la enseña sin que nadie la fuerce.
 
 El **módulo 6 va aparte, y es autocontenido**: el 3 construye a mano un agente con
 catálogo cerrado para enseñar el principio; el 6 muestra ese mismo principio ya
@@ -81,8 +84,9 @@ laboratorios anteriores. El módulo 6 es **autocontenido** — crea su propia ba
 necesita ningún otro — y con el nivel siempre gratuito no consume crédito.
 
 > **El de costo va primero, y no es una formalidad.** Los créditos de una cuenta de
-> prueba son finitos y no vuelven. Es un despliegue de un minuto que avisa antes de que
-> el gasto ocurra.
+> prueba son finitos y no vuelven. Es un despliegue de un minuto, con su alcance dicho de
+> frente: **avisa, no corta.** Nada se apaga solo al cruzar un umbral, y OCI evalúa las
+> alertas cada 24 horas.
 
 Detalle completo en la [guía de despliegue](https://jesmonsa.github.io/oci-workshop-labs/despliegue.html).
 

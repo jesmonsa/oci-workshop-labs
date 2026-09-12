@@ -217,7 +217,8 @@ apagado.
 
 La segunda es que el presupuesto **es material del laboratorio**. Es el control de FinOps
 más barato que existe: se activa en cinco minutos, no necesita proyecto ni herramienta
-adicional, y avisa antes de que el gasto ocurra en vez de después.
+adicional, y su alerta de proyección avisa antes de que el presupuesto se supere, no
+después. Lo que no hace es frenar el gasto; el alcance exacto está al final del capítulo.
 
 > CONSOLA: Billing & Cost Management › Budgets › Create Budget
 
@@ -280,9 +281,11 @@ De los tres umbrales, el útil es el del 50 %: llega cuando todavía hay margen 
 corregir. El del 90 % ya solo sirve para apagar cosas.
 
 Una advertencia sobre el alcance de este control: los presupuestos de OCI **avisan, no
-cortan**. Nada se apaga solo cuando se cruza un umbral. El control real sigue siendo el
-hábito de apagar el laboratorio todos los días y la revisión periódica de **Cost
-Analysis**.
+cortan**. Son un límite informativo —un *soft limit*, en los términos de la documentación—:
+nada se apaga solo cuando se cruza un umbral. Y el aviso tampoco es instantáneo: OCI
+**evalúa las reglas de alerta cada 24 horas**, así que un descuido de la tarde puede tardar
+un día en llegar al correo. Por eso el control real sigue siendo el hábito de apagar el
+laboratorio todos los días y la revisión periódica de **Cost Analysis**.
 
 En el ensayo de referencia, el laboratorio completo registró **0,13 USD** de cómputo y el
 presupuesto proyectó **2,10 USD** para el mes contra un límite de 150. El orden de

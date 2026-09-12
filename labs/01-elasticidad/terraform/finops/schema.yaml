@@ -33,7 +33,7 @@ variables:
   monto_presupuesto:
     type: number
     title: "Presupuesto mensual (USD)"
-    description: "El crédito de una cuenta de prueba es finito y no vuelve. Este es el control más barato que existe."
+    description: "El crédito de una cuenta de prueba es finito y no vuelve. Este es el control más barato que existe. Avisa, no corta: nada se apaga al cruzar un umbral y OCI evalúa las alertas cada 24 horas."
     default: 150
     minimum: 10
     maximum: 100000

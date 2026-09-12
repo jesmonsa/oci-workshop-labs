@@ -91,9 +91,16 @@ resource "oci_monitoring_alarm" "cpu_saturacion" {
 
     QUE HACER (runbook): ${var.url_runbook_cpu}
 
-    Antes de escalar manualmente, verificar si el autoescalamiento ya reaccionó:
-    si el pool creció y la carga es legitima, esta alarma se cierra sola y NO
-    requiere accion — solo queda registrada para la revision semanal.
+    Antes de escalar manualmente, mirar DOS cosas:
+
+    1. Si los backends responden. Si el servicio no se degrado, esto no es una
+       urgencia: la plataforma esta absorbiendo la rafaga.
+    2. Si el grupo llego a su tamano maximo. Esa es la senal que importa, porque
+       significa que ya no queda margen para crecer.
+
+    Esta alarma NO se cierra porque entre capacidad: medido, con la carga puesta
+    el grupo crecio hasta su maximo y siguio sonando 35 minutos. Se cierra cuando
+    baja la demanda. Mas capacidad no baja la utilizacion, sube el rendimiento.
   EOT
 
   freeform_tags = local.tags

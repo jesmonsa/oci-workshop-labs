@@ -162,7 +162,7 @@ def construir_xlsx(ruta):
             f'IF(I{r}="","Pendiente",'
             f'IF(AND(OR(L{r}="Sí 24x7",H{r}="CRITICAL"),OR(J{r}="",K{r}="")),"Ruido",'
             f'IF(OR(I{r}="No",I{r}="No sé"),"Por implementar",'
-            f'IF(AND(J{r}<>"",K{r}<>""),"Lista","Incompleta")))))'))
+            f'IF(AND(G{r}<>"",J{r}<>"",K{r}<>""),"Lista","Incompleta")))))'))
         c.font = f(True)
         c.alignment = Alignment(horizontal="center", vertical="top")
         c.border = BORDE
@@ -403,10 +403,10 @@ def construir_md():
         "",
         "| Estado | Cuándo |",
         "|---|---|",
-        "| **Lista** | Existe, con responsable y acción |",
+        "| **Lista** | Existe, con umbral acordado, responsable y acción |",
         "| **Ruido** | Despierta a alguien (24x7 o CRITICAL) sin responsable o sin acción |",
         "| **Por implementar** | No existe todavía |",
-        "| **Incompleta** | Existe pero le falta responsable o acción |",
+        "| **Incompleta** | Existe pero le falta umbral acordado, responsable o acción |",
         "",
         f"Total: {len(SENALES)} señales candidatas en {len(CATEGORIAS)} categorías.",
         "",

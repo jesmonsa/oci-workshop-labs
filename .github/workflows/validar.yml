@@ -40,6 +40,20 @@ jobs:
       - name: Existe schema.yaml
         run: test -f schema.yaml
 
+  esquemas:
+    name: Formularios · concuerdan con Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pyyaml
+      # Que el schema.yaml exista no basta: si se separa del Terraform, el
+      # despliegue en un clic falla en manos de quien lo usa, no en las nuestras.
+      # Ya pasó una vez con las reglas del WAF.
+      - run: python scripts/verificar_esquemas.py
+
   scripts:
     name: Scripts · sintaxis
     runs-on: ubuntu-latest

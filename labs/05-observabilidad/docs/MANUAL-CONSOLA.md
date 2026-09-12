@@ -1195,10 +1195,10 @@ Dejarla como está no es una de ellas.
 
 | Estado | Cuándo |
 |---|---|
-| **Lista** | Existe, con responsable y acción |
+| **Lista** | Existe, con umbral acordado, responsable y acción |
 | **Ruido** | Despierta a alguien sin responsable o sin acción escrita |
 | **Por implementar** | No existe todavía |
-| **Incompleta** | Existe pero le falta responsable o acción |
+| **Incompleta** | Existe pero le falta umbral acordado, responsable o acción |
 
 ### 13.3 El catálogo de partida
 
