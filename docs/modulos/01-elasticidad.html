@@ -54,6 +54,17 @@
   <ol class="pasos"><li><h3>Poner los guardarraíles de costo</h3><p>Antes de crear nada. Es un despliegue de un minuto que avisa antes de que el gasto ocurra, y el crédito de una cuenta de prueba no vuelve.</p></li><li><h3>Desplegar el laboratorio</h3><p>Con el botón, o con <code>terraform apply</code>. Entre 5 y 8 minutos: el balanceador es lo más lento.</p></li><li><h3>Comprobar que responde</h3><p><code>curl</code> a la URL del balanceador dos veces seguidas: el nombre del host debe alternar. Si no alterna, hay un solo backend sano.</p></li><li><h3>Medir el ciclo</h3><p>Generar carga y cronometrar tres momentos: cuándo cruza el umbral la métrica, cuándo arranca la instancia nueva, y cuándo empieza a atender tráfico. <strong>Ese último número es el que importa</strong>: define cuánto colchón hace falta por encima de la demanda.</p></li><li><h3>Cortar la carga y mirar el scale-in</h3><p>Tarda más que la subida, a propósito: se baja con más cautela de la que se sube.</p></li><li><h3>Destruir</h3><p><code>./scripts/99-destroy.sh</code>. Todos los días.</p></li></ol>
 </section>
 
+
+<section>
+  <h2>La regla, en una hoja</h2>
+  <p>Una pagina pensada para <strong>proyectar</strong>: que dice la regla de
+  escalamiento, cuanto tarda en dar capacidad nueva y cuanto en devolverla, con los
+  tiempos medidos en el laboratorio. Escrita para alguien que nunca ha configurado un
+  autoescalamiento.</p>
+  <p><a href="../autoescalamiento.html">Abrir la hoja &rarr;</a></p>
+</section>
+
+
 <section>
   <h2>Hacerlo a mano, en la consola</h2>
   <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la

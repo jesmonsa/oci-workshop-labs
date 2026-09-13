@@ -51,6 +51,8 @@
   <ol class="pasos"><li><h3>Instalar y probar sin credenciales</h3><p><code>--catalogo</code> muestra las ocho herramientas y <code>--autoprueba</code> ejercita la capa de validación. Los dos funcionan sin cuenta de nube y sin modelo: si fallan, el problema es el entorno.</p></li><li><h3>Comprobar si hay modelos disponibles</h3><p>El servicio de IA generativa no está en todas las regiones. El agente descubre el modelo por su cuenta en vez de traer un identificador fijo, que es la forma más segura de que algo falle meses después.</p></li><li><h3>Preguntar contra el laboratorio</h3><p>«¿cuántas máquinas hay corriendo?», «¿alguna tiene IP pública?», «¿cuánto llevamos gastando este mes?». Cada respuesta imprime tres líneas: lo que propuso el modelo, lo que decidió el validador, y el resultado.</p></li><li><h3>Pedirle algo que no debe hacer</h3><p>«apaga la instancia app-1». Termina en <code>RECHAZADA · no se ejecutó nada</code>. Es el momento que sostiene el módulo.</p></li><li><h3>Intentar una inyección de instrucciones</h3><p>Mismo rechazo. Ninguna instrucción escrita puede sacar al agente de su catálogo, porque el catálogo no se decide con texto.</p></li><li><h3>Leer la bitácora</h3><p>Una línea por interacción. No guarda los datos devueltos, solo cuántas filas: una bitácora que copia lo consultado se convierte ella misma en un problema de seguridad.</p></li></ol>
 </section>
 
+
+
 <section>
   <h2>Hacerlo a mano, en la consola</h2>
   <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la

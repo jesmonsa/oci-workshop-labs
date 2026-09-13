@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="La regla del autoescalamiento y cuánto tarda de verdad en subir y bajar, con los tiempos medidos en el laboratorio.">
+<title>Autoescalamiento en una hoja</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@500;700&display=swap">
+
+<style>
+:root{
+  --ground:#f4f6f9;
+  --surface:#ffffff;
+  --surface-2:#eaeef4;
+  --ink:#14181f;
+  --ink-2:#4d5768;
+  --ink-3:#78829a;
+  --rule:#d8dee8;
+  --sube:#c2410c;
+  --sube-tenue:#fdf0e8;
+  --baja:#0f766e;
+  --baja-tenue:#e6f4f2;
+  --aviso:#7c2d12;
+  --aviso-fondo:#fdf4e7;
+
+  --f-display:"Archivo","Arial Narrow",Helvetica,sans-serif;
+  --f-texto:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0d1016;
+    --surface:#161b23;
+    --surface-2:#1f2632;
+    --ink:#eef1f7;
+    --ink-2:#a8b2c4;
+    --ink-3:#79839a;
+    --rule:#2b3342;
+    --sube:#fb923c;
+    --sube-tenue:#2a1a10;
+    --baja:#2dd4bf;
+    --baja-tenue:#0d2220;
+    --aviso:#fbbf24;
+    --aviso-fondo:#241c0d;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0d1016;
+  --surface:#161b23;
+  --surface-2:#1f2632;
+  --ink:#eef1f7;
+  --ink-2:#a8b2c4;
+  --ink-3:#79839a;
+  --rule:#2b3342;
+  --sube:#fb923c;
+  --sube-tenue:#2a1a10;
+  --baja:#2dd4bf;
+  --baja-tenue:#0d2220;
+  --aviso:#fbbf24;
+  --aviso-fondo:#241c0d;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--f-texto);font-size:19px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+.hoja{max-width:1180px;margin:0 auto;padding:40px 32px 64px;
+  display:flex;flex-direction:column;gap:40px}
+
+/* ---------- encabezado ---------- */
+.cabecera{display:flex;flex-direction:column;gap:10px}
+.eyebrow{font-family:var(--f-texto);font-size:14px;font-weight:600;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(38px,5.4vw,62px);
+  line-height:1.02;letter-spacing:-.025em;margin:0;text-wrap:balance}
+.entrada{font-size:clamp(19px,2vw,23px);color:var(--ink-2);max-width:62ch;margin:0;
+  line-height:1.5}
+.entrada b{color:var(--ink);font-weight:600}
+
+/* ---------- bloques ---------- */
+section{display:flex;flex-direction:column;gap:18px}
+h2{font-family:var(--f-display);font-weight:700;font-size:clamp(22px,2.5vw,30px);
+  letter-spacing:-.015em;margin:0;text-wrap:balance}
+.sub{margin:-8px 0 0;color:var(--ink-2);font-size:18px;max-width:64ch}
+
+/* ---------- la regla ---------- */
+.reglas{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.regla{background:var(--surface);border:1px solid var(--rule);border-radius:14px;
+  padding:26px 28px;display:flex;flex-direction:column;gap:14px;position:relative;
+  overflow:hidden}
+.regla::before{content:"";position:absolute;inset:0 auto 0 0;width:6px}
+.regla.sube::before{background:var(--sube)}
+.regla.baja::before{background:var(--baja)}
+.regla-tit{font-family:var(--f-display);font-weight:800;font-size:15px;
+  letter-spacing:.16em;text-transform:uppercase}
+.regla.sube .regla-tit{color:var(--sube)}
+.regla.baja .regla-tit{color:var(--baja)}
+.regla-frase{font-size:clamp(21px,2.2vw,26px);line-height:1.35;margin:0;
+  color:var(--ink);font-weight:400}
+.regla-frase b{font-weight:600}
+.regla-codigo{font-family:var(--f-mono);font-size:16px;font-weight:500;
+  background:var(--surface-2);border-radius:8px;padding:11px 14px;color:var(--ink-2);
+  overflow-x:auto;white-space:nowrap}
+
+/* ---------- limites ---------- */
+.limites{display:flex;gap:0;background:var(--surface);border:1px solid var(--rule);
+  border-radius:14px;overflow:hidden;flex-wrap:wrap}
+.limite{flex:1 1 150px;padding:20px 22px;display:flex;flex-direction:column;gap:4px;
+  border-right:1px solid var(--rule)}
+.limite:last-child{border-right:0}
+.limite-n{font-family:var(--f-display);font-weight:800;font-size:clamp(30px,3.6vw,42px);
+  line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.limite-et{font-size:15px;color:var(--ink-2);line-height:1.35}
+
+/* ---------- linea de tiempo ---------- */
+.tiempo-caja{background:var(--surface);border:1px solid var(--rule);border-radius:14px;
+  padding:30px 28px 26px;overflow-x:auto}
+.pista{min-width:620px}
+.barra{display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:0}
+.tramo{position:relative}
+.t1{flex:0 0 9.3%;background:var(--surface-2)}
+.t2{flex:0 0 50.6%;background:color-mix(in srgb,var(--sube) 32%,transparent)}
+.t3{flex:0 0 40.1%;background:var(--sube)}
+.hitos{display:flex;min-width:620px;margin-top:14px}
+.hito{position:relative;padding-left:12px;border-left:2px solid var(--rule)}
+.hito.h1{flex:0 0 9.3%}
+.hito.h2{flex:0 0 50.6%}
+.hito.h3{flex:0 0 40.1%}
+.hito.h4{flex:0 0 0;min-width:170px;border-left-color:var(--sube)}
+.hito-t{font-family:var(--f-display);font-weight:800;font-size:26px;line-height:1.1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.hito.h4 .hito-t{color:var(--sube);font-size:32px}
+.hito-q{font-size:15px;color:var(--ink-2);line-height:1.35;margin-top:3px;
+  padding-right:14px}
+.hito.h4 .hito-q{color:var(--ink);font-weight:600}
+
+/* ---------- destacado ---------- */
+.clave{background:var(--sube-tenue);border:1px solid color-mix(in srgb,var(--sube) 26%,transparent);
+  border-radius:12px;padding:22px 26px;display:flex;flex-direction:column;gap:8px}
+.clave-t{font-family:var(--f-display);font-weight:700;font-size:19px;color:var(--sube)}
+.clave p{margin:0;font-size:18px;color:var(--ink);line-height:1.5}
+
+.aviso{background:var(--aviso-fondo);border-left:5px solid var(--aviso);
+  border-radius:0 12px 12px 0;padding:22px 26px;display:flex;flex-direction:column;gap:10px}
+.aviso-t{font-family:var(--f-display);font-weight:700;font-size:19px;color:var(--aviso)}
+.aviso p{margin:0;font-size:18px;line-height:1.5}
+.aviso b{font-weight:600}
+
+/* ---------- reloj del enfriamiento ---------- */
+.reloj{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  margin-top:4px}
+.caso{background:var(--surface);border:1px solid var(--rule);border-radius:12px;
+  padding:20px 22px;display:flex;flex-direction:column;gap:10px}
+.caso-t{font-size:15px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3)}
+.caso ol{margin:0;padding-left:20px;font-size:17px;color:var(--ink-2);line-height:1.5}
+.caso li{margin-bottom:5px}
+.caso li b{color:var(--ink);font-weight:600}
+.caso.mal .caso-t{color:var(--ink-3)}
+.caso.bien{border-color:color-mix(in srgb,var(--aviso) 45%,transparent)}
+.caso.bien .caso-t{color:var(--aviso)}
+
+/* ---------- recordar ---------- */
+.recordar{background:var(--ink);color:var(--ground);border-radius:14px;
+  padding:32px 34px;display:flex;flex-direction:column;gap:12px}
+:root[data-theme="dark"] .recordar,
+:root:not([data-theme="light"]) .recordar{background:var(--surface-2);color:var(--ink)}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme="dark"]) .recordar{background:var(--ink);color:var(--ground)}
+}
+.recordar-t{font-family:var(--f-display);font-weight:800;font-size:15px;
+  letter-spacing:.16em;text-transform:uppercase;opacity:.62}
+.recordar p{margin:0;font-size:clamp(21px,2.3vw,27px);line-height:1.38;max-width:52ch}
+
+/* ---------- pie ---------- */
+footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);
+  font-size:15px;display:flex;flex-direction:column;gap:6px}
+footer b{color:var(--ink-2);font-weight:600}
+
+@media (max-width:640px){
+  body{font-size:17px}
+  .hoja{padding:28px 20px 48px;gap:32px}
+}
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <header class="cabecera">
+    <span class="eyebrow">Oracle Cloud · Instance Pool con autoescalamiento</span>
+    <h1>Autoescalamiento en una hoja</h1>
+    <p class="entrada">Un grupo de servidores idénticos que <b>crece cuando hay demanda
+    y se encoge cuando no</b>, siguiendo una regla escrita. Nadie interviene, nadie
+    aprueba nada. Esta hoja dice cuál es la regla y —lo que casi nunca se cuenta—
+    <b>cuánto tarda cada cosa de verdad</b>.</p>
+  </header>
+
+  <section>
+    <h2>La regla, completa</h2>
+    <p class="sub">Son dos frases. Todo lo demás es consecuencia de estas dos.</p>
+
+    <div class="reglas">
+      <div class="regla sube">
+        <span class="regla-tit">Cuando sobra trabajo</span>
+        <p class="regla-frase">Si el grupo pasa del <b>55 % de CPU</b>,
+          se agregan <b>2 máquinas</b>.</p>
+        <div class="regla-codigo">CPU_UTILIZATION &gt; 55 %  →  +2</div>
+      </div>
+      <div class="regla baja">
+        <span class="regla-tit">Cuando falta trabajo</span>
+        <p class="regla-frase">Si el grupo baja del <b>20 % de CPU</b>,
+          se quita <b>1 máquina</b>.</p>
+        <div class="regla-codigo">CPU_UTILIZATION &lt; 20 %  →  −1</div>
+      </div>
+    </div>
+
+    <div class="limites">
+      <div class="limite">
+        <span class="limite-n">2</span>
+        <span class="limite-et">mínimo · nunca baja de aquí</span>
+      </div>
+      <div class="limite">
+        <span class="limite-n">6</span>
+        <span class="limite-et">máximo · nunca sube de aquí</span>
+      </div>
+      <div class="limite">
+        <span class="limite-n">5 min</span>
+        <span class="limite-et">espera obligatoria entre una acción y la siguiente</span>
+      </div>
+      <div class="limite">
+        <span class="limite-n">1 OCPU</span>
+        <span class="limite-et">tamaño de cada máquina · 8 GB de memoria</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cuánto tarda en dar capacidad nueva</h2>
+    <p class="sub">Medido con cronómetro, no estimado. Los tramos están dibujados a escala.</p>
+
+    <div class="tiempo-caja">
+      <div class="pista">
+        <div class="barra">
+          <div class="tramo t1"></div>
+          <div class="tramo t2"></div>
+          <div class="tramo t3"></div>
+        </div>
+        <div class="hitos">
+          <div class="hito h1">
+            <div class="hito-t">0:00</div>
+            <div class="hito-q">Sube el tráfico</div>
+          </div>
+          <div class="hito h2">
+            <div class="hito-t">1:06</div>
+            <div class="hito-q">La CPU cruza el 55 %. La regla ya se cumple, pero todavía
+              no pasa nada</div>
+          </div>
+          <div class="hito h3">
+            <div class="hito-t">7:04</div>
+            <div class="hito-q">Aparecen 2 máquinas nuevas en la consola</div>
+          </div>
+          <div class="hito h4">
+            <div class="hito-t">11:47</div>
+            <div class="hito-q">Esas máquinas ya están atendiendo tráfico</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="clave">
+      <span class="clave-t">Aparecer no es atender</span>
+      <p>Entre que la máquina aparece en la consola y que recibe su primera petición
+      pasan casi <b>5 minutos más</b>: tiene que arrancar el sistema, instalar la
+      aplicación y responder bien a <b>tres chequeos de salud seguidos</b>, uno cada
+      10 segundos. <b>El número que importa es 11:47, no 7:04.</b></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cuánto tarda en devolver las máquinas</h2>
+    <p class="sub">Bajar es más lento que subir, y es a propósito.</p>
+
+    <div class="limites">
+      <div class="limite">
+        <span class="limite-n">~10 min</span>
+        <span class="limite-et">por cada máquina que se apaga</span>
+      </div>
+      <div class="limite">
+        <span class="limite-n">1</span>
+        <span class="limite-et">se apagan de una en una, nunca de golpe</span>
+      </div>
+      <div class="limite">
+        <span class="limite-n">~40 min</span>
+        <span class="limite-et">volver de 6 máquinas a 2</span>
+      </div>
+    </div>
+
+    <div class="clave" style="background:var(--baja-tenue);border-color:color-mix(in srgb,var(--baja) 26%,transparent)">
+      <span class="clave-t" style="color:var(--baja)">Por qué baja despacio</span>
+      <p>Sube de 2 en 2 y baja de 1 en 1, deliberadamente.
+      <b>Equivocarse agregando capacidad cuesta centavos. Equivocarse quitándola cuesta
+      una caída de servicio.</b></p>
+    </div>
+  </section>
+
+  <section>
+    <h2>La trampa: el reloj de los 5 minutos</h2>
+    <p class="sub">Es lo que más confunde, y lo que hace que uno crea que el sistema no
+    funciona.</p>
+
+    <div class="reloj">
+      <div class="caso mal">
+        <span class="caso-t">Lo que uno supone</span>
+        <ol>
+          <li>Corto el tráfico</li>
+          <li>Espero <b>5 minutos</b></li>
+          <li>Se apaga una máquina</li>
+        </ol>
+      </div>
+      <div class="caso bien">
+        <span class="caso-t">Lo que pasa de verdad</span>
+        <ol>
+          <li>Corto el tráfico — <b>23:38</b></li>
+          <li>El grupo <b>todavía crece</b>: la decisión ya estaba tomada — <b>23:40</b></li>
+          <li>El reloj de 5 minutos arranca <b>aquí</b>, no en el paso 1</li>
+          <li>Recién entonces se apaga una — <b>23:51</b></li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="aviso">
+      <span class="aviso-t">La frase que hay que recordar</span>
+      <p>Los 5 minutos de espera <b>no se cuentan desde que baja el tráfico</b>: se
+      cuentan <b>desde la última vez que el grupo cambió de tamaño</b>. Y cuando uno
+      corta el tráfico, el grupo casi siempre trae un cambio en camino que reinicia
+      ese reloj.</p>
+    </div>
+  </section>
+
+  <section class="recordar">
+    <span class="recordar-t">Lo único que hay que llevarse</span>
+    <p>La elasticidad <b>no es instantánea</b>. Toma unos 12 minutos dar capacidad útil.
+    Eso no es un defecto: es el número que dice <b>cuánto colchón hay que tener por
+    encima de la demanda esperada</b>.</p>
+    <p style="font-size:19px;opacity:.78;max-width:56ch">La elasticidad no sustituye a la
+    planeación. Le cambia el costo de equivocarse.</p>
+  </section>
+
+  <footer>
+    <div><b>De dónde salen estos números.</b> Dos corridas completas en el laboratorio,
+    el 11 y el 12 de septiembre de 2026. El crecimiento se midió en 410 s y 424 s: catorce
+    segundos de diferencia entre dos pruebas independientes.</div>
+    <div>Configuración verificada contra el ambiente: <b>mín. 2 · máx. 6 · enfriamiento
+    300 s · sube &gt;55 % (+2) · baja &lt;20 % (−1)</b> · chequeo de salud
+    <b>HTTP /health cada 10 s, 3 reintentos</b>.</div>
+  </footer>
+
+</div>
+</body>
+</html>

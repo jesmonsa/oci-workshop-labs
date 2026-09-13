@@ -49,6 +49,8 @@
   <ol class="pasos"><li><h3>Activar la postura antes que nada</h3><p>Cloud Guard tarda en acumular hallazgos: encenderlo el mismo día de la sesión es encenderlo tarde.</p></li><li><h3>Verificar las reglas del WAF</h3><p>Las claves de las capacidades de protección cambian entre regiones. El manual trae el comando; hacerlo antes del primer despliegue.</p></li><li><h3>Desplegar el laboratorio seguro</h3><p>Entre 8 y 12 minutos.</p></li><li><h3>Auditar el módulo 1</h3><p><code>./scripts/10-auditoria-rapida.sh</code> contra el compartment del laboratorio anterior. Debe encontrar varios hallazgos altos. Correrlo también contra este: casi todo debe salir limpio. Que encuentre cosas en uno y no en el otro es la mejor prueba de que el script funciona.</p></li><li><h3>Comparar los dos balanceadores</h3><p><code>./scripts/20-prueba-waf.sh</code> imprime una tabla de dos columnas con los códigos HTTP. Se lee de un vistazo.</p></li><li><h3>Entrar por el bastión</h3><p>Crear la sesión toma uno o dos minutos: conviene hacerlo antes, no en vivo.</p></li></ol>
 </section>
 
+
+
 <section>
   <h2>Hacerlo a mano, en la consola</h2>
   <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la

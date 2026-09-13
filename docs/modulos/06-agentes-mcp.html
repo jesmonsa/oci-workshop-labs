@@ -54,6 +54,8 @@
   <ol class="pasos"><li><h3>Verificar el equipo primero</h3><p>Este módulo se apoya sobre todo en herramientas locales: SQLcl 25.2 o posterior, Java 17 o 21, Python. Si falta algo de eso, no lo arregla ningún despliegue.</p></li><li><h3>Desplegar la base</h3><p>Una Autonomous Database, sin VCN ni bastión. Con el nivel siempre gratuito no consume crédito. Entre 3 y 10 minutos.</p></li><li><h3>Preparar la conexión</h3><p>Se descarga el wallet y se guarda la conexión. El servidor MCP <strong>no recibe credenciales</strong>: usa conexiones que una persona guardó antes. El agente nunca ve la contraseña.</p></li><li><h3>Cargar el esquema de ejemplo</h3><p>Cuatro tablas al estilo de un sistema heredado, con cuatro problemas puestos a propósito que no se anuncian.</p></li><li><h3>Inspeccionar el servidor MCP</h3><p>El catálogo completo, en dos niveles de restricción, para compararlos. Aquí aparece el hallazgo del módulo.</p></li><li><h3>Crear el usuario mínimo</h3><p>Un usuario que solo lee cuatro tablas. El script comprueba en vivo que puede consultar y no puede borrar.</p></li><li><h3>Conectar el cliente de IA y preguntarle</h3><p>Termina pidiéndole que borre datos. La base lo rechaza, y el agente lo reporta.</p></li></ol>
 </section>
 
+
+
 <section>
   <h2>Hacerlo a mano, en la consola</h2>
   <p>Este módulo también está escrito pantalla por pantalla, para construirlo desde la
