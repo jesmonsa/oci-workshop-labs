@@ -50,13 +50,18 @@ echo "Compartment: ${COMP:0:40}..."
 echo
 
 # --- R-01 · Instancias con IP pública -----------------------------------------
+# Al decodificar se quita el retorno de carro: en Windows el CLI escribe CRLF, el
+# 
+ se cuela en la cadena base64 y `base64 -d` escupe "invalid input" en medio de
+# la demostracion. No altera el resultado de la auditoria, pero ensucia la pantalla
+# justo en el momento en que el cliente esta mirando.
 paso "Instancias con IP pública"
 INSTANCIAS=$(oci compute instance list --compartment-id "$COMP" --all \
   --lifecycle-state RUNNING --query 'data[].{id:id,n:"display-name"}' 2>/dev/null || echo "[]")
 N_PUB=0
 for row in $(echo "$INSTANCIAS" | jq -r '.[] | @base64'); do
-  ID=$(echo "$row" | base64 -d | jq -r .id)
-  NOMBRE=$(echo "$row" | base64 -d | jq -r .n)
+  ID=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r .id)
+  NOMBRE=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r .n)
   IP=$(oci compute instance list-vnics --instance-id "$ID" \
         --query 'data[0]."public-ip"' --raw-output 2>/dev/null || echo "")
   if [ -n "$IP" ] && [ "$IP" != "null" ]; then
@@ -120,8 +125,8 @@ WAF_LBS=$(oci waf web-app-firewall list --compartment-id "$COMP" --all 2>/dev/nu
 N_LB=0
 for row in $(oci lb load-balancer list --compartment-id "$COMP" --all 2>/dev/null \
     | jq -r '.data[]? | select(."is-private"==false) | @base64'); do
-  LBID=$(echo "$row" | base64 -d | jq -r .id)
-  LBN=$(echo "$row" | base64 -d | jq -r '."display-name"')
+  LBID=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r .id)
+  LBN=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r '."display-name"')
   N_LB=$((N_LB+1))
   if echo "$WAF_LBS" | grep -q "$LBID"; then
     cumple B-02 "Balanceador '$LBN' tiene WAF"
@@ -181,7 +186,7 @@ if [ -n "$TENANCY" ]; then
 
   LIMITE=$(date -u -d '90 days ago' +%s 2>/dev/null || date -u -v-90d +%s)
   for row in $(echo "$USUARIOS" | jq -r '.data[]? | select(."lifecycle-state"=="ACTIVE") | @base64'); do
-    UID_=$(echo "$row" | base64 -d | jq -r .id); UN=$(echo "$row" | base64 -d | jq -r .name)
+    UID_=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r .id); UN=$(printf '%s' "$row" | tr -d '\015' | base64 -d | jq -r .name)
     oci iam user api-key list --user-id "$UID_" 2>/dev/null \
       | jq -r '.data[]? | ."time-created"' | while read -r t; do
           TS=$(date -u -d "${t%%.*}" +%s 2>/dev/null || echo "$LIMITE")

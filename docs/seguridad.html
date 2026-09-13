@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Dos laboratorios, la misma auditoria: 5 hallazgos altos contra 0, con los resultados reales de las cuatro pruebas.">
+<title>Dos laboratorios, una auditoría</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@600;700;900&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+
+<style>
+:root{
+  --ground:#f5f6f8;
+  --surface:#ffffff;
+  --surface-2:#e9ecf1;
+  --ink:#12151b;
+  --ink-2:#4b5464;
+  --ink-3:#7b8496;
+  --rule:#d7dbe3;
+
+  --riesgo:#b42318;
+  --riesgo-tenue:#fdf0ee;
+  --riesgo-borde:#f2c8c2;
+  --seguro:#0e5e6f;
+  --seguro-tenue:#e7f3f5;
+  --seguro-borde:#b9dce3;
+
+  --f-display:"Chivo","Arial Black",Helvetica,sans-serif;
+  --f-texto:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0b0e13;
+    --surface:#141821;
+    --surface-2:#1e242f;
+    --ink:#eef1f6;
+    --ink-2:#a6b0c0;
+    --ink-3:#737d8f;
+    --rule:#29303c;
+    --riesgo:#f97066;
+    --riesgo-tenue:#2a1512;
+    --riesgo-borde:#5d2a24;
+    --seguro:#3fc9dd;
+    --seguro-tenue:#0d2429;
+    --seguro-borde:#1d4a54;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0b0e13; --surface:#141821; --surface-2:#1e242f;
+  --ink:#eef1f6; --ink-2:#a6b0c0; --ink-3:#737d8f; --rule:#29303c;
+  --riesgo:#f97066; --riesgo-tenue:#2a1512; --riesgo-borde:#5d2a24;
+  --seguro:#3fc9dd; --seguro-tenue:#0d2429; --seguro-borde:#1d4a54;
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:var(--f-texto);font-size:19px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.hoja{max-width:1180px;margin:0 auto;padding:40px 32px 64px;
+  display:flex;flex-direction:column;gap:44px}
+
+.cabecera{display:flex;flex-direction:column;gap:10px}
+.eyebrow{font-size:14px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3)}
+h1{font-family:var(--f-display);font-weight:900;font-size:clamp(38px,5.4vw,62px);
+  line-height:1.02;letter-spacing:-.03em;margin:0;text-wrap:balance}
+.entrada{font-size:clamp(19px,2vw,23px);color:var(--ink-2);max-width:64ch;margin:0}
+.entrada b{color:var(--ink);font-weight:600}
+
+section{display:flex;flex-direction:column;gap:20px}
+h2{font-family:var(--f-display);font-weight:700;font-size:clamp(22px,2.5vw,30px);
+  letter-spacing:-.02em;margin:0;text-wrap:balance}
+.sub{margin:-10px 0 0;color:var(--ink-2);font-size:18px;max-width:66ch}
+
+/* ---------- el contraste ---------- */
+.duelo{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.lado{border-radius:16px;padding:28px 30px;display:flex;flex-direction:column;gap:18px;
+  border:1px solid var(--rule);background:var(--surface)}
+.lado.malo{background:var(--riesgo-tenue);border-color:var(--riesgo-borde)}
+.lado.bueno{background:var(--seguro-tenue);border-color:var(--seguro-borde)}
+.lado-cab{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.cifra{font-family:var(--f-display);font-weight:900;font-size:clamp(64px,9vw,104px);
+  line-height:.82;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.lado.malo .cifra{color:var(--riesgo)}
+.lado.bueno .cifra{color:var(--seguro)}
+.cifra-et{font-family:var(--f-display);font-weight:700;font-size:17px;line-height:1.2;
+  text-transform:uppercase;letter-spacing:.1em}
+.lado.malo .cifra-et{color:var(--riesgo)}
+.lado.bueno .cifra-et{color:var(--seguro)}
+.lado-nombre{font-size:17px;color:var(--ink-2);margin:0}
+.lado-nombre b{color:var(--ink);font-weight:600}
+.lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.lista li{font-size:17px;line-height:1.4;padding-left:26px;position:relative;color:var(--ink)}
+.lista li::before{position:absolute;left:0;top:0;font-family:var(--f-mono);font-weight:600;
+  font-size:16px}
+.lado.malo .lista li::before{content:"✕";color:var(--riesgo)}
+.lado.bueno .lista li::before{content:"✓";color:var(--seguro)}
+.menores{font-size:15px;color:var(--ink-3);border-top:1px solid var(--rule);padding-top:12px;
+  margin:0}
+
+/* ---------- tabla waf ---------- */
+.tabla-caja{background:var(--surface);border:1px solid var(--rule);border-radius:16px;
+  overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th{text-align:left;font-size:13px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);padding:18px 22px 12px;border-bottom:1px solid var(--rule)}
+th.num{text-align:center}
+td{padding:15px 22px;border-bottom:1px solid var(--rule);font-size:17px;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.q{font-family:var(--f-mono);font-size:15px;color:var(--ink-2)}
+td.num{text-align:center;width:170px}
+.codigo{font-family:var(--f-mono);font-weight:600;font-size:19px;padding:6px 14px;
+  border-radius:7px;display:inline-block;min-width:66px}
+.c200{background:var(--surface-2);color:var(--ink-2)}
+.c403{background:var(--seguro);color:var(--ground)}
+.c200.pasa{background:var(--riesgo-tenue);color:var(--riesgo)}
+
+/* ---------- bloques de prueba ---------- */
+.pruebas{display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.prueba{background:var(--surface);border:1px solid var(--rule);border-radius:14px;
+  padding:24px 26px;display:flex;flex-direction:column;gap:12px}
+.prueba-n{font-family:var(--f-display);font-weight:900;font-size:15px;letter-spacing:.12em;
+  color:var(--seguro)}
+.prueba h3{font-family:var(--f-display);font-weight:700;font-size:21px;margin:0;
+  letter-spacing:-.01em}
+.prueba p{margin:0;font-size:17px;color:var(--ink-2);line-height:1.45}
+.prueba p b{color:var(--ink);font-weight:600}
+.dato{font-family:var(--f-mono);font-size:15px;background:var(--surface-2);
+  border-radius:8px;padding:10px 13px;color:var(--ink-2);overflow-x:auto;white-space:nowrap}
+
+/* ---------- remate ---------- */
+.remate{background:var(--ink);color:var(--ground);border-radius:16px;padding:34px 36px;
+  display:flex;flex-direction:column;gap:14px}
+:root[data-theme="dark"] .remate{background:var(--surface-2);color:var(--ink)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .remate{background:var(--surface-2);color:var(--ink)}
+}
+.remate-t{font-family:var(--f-display);font-weight:900;font-size:15px;letter-spacing:.14em;
+  text-transform:uppercase;opacity:.6}
+.remate p{margin:0;font-size:clamp(21px,2.3vw,27px);line-height:1.38;max-width:54ch}
+.remate .menor{font-size:19px;opacity:.8;max-width:58ch}
+
+footer{border-top:1px solid var(--rule);padding-top:20px;color:var(--ink-3);font-size:15px;
+  display:flex;flex-direction:column;gap:6px}
+footer b{color:var(--ink-2);font-weight:600}
+
+@media (max-width:640px){body{font-size:17px}.hoja{padding:28px 20px 48px;gap:34px}}
+</style>
+</head>
+<body>
+<div class="hoja">
+
+  <header class="cabecera">
+    <span class="eyebrow">Oracle Cloud · Postura de seguridad</span>
+    <h1>Dos laboratorios, una auditoría</h1>
+    <p class="entrada">Dos ambientes que hacen <b>exactamente lo mismo</b>: una aplicación
+    web detrás de un balanceador. Uno se construyó con prisa; el otro, con criterio.
+    El mismo script de auditoría se corre contra los dos, <b>en vivo y delante de
+    ustedes</b>. Esta hoja tiene los resultados reales.</p>
+  </header>
+
+  <section>
+    <h2>El resultado, sin adornos</h2>
+    <p class="sub">Hallazgos de severidad alta. Misma herramienta, mismos controles,
+    misma región, misma hora.</p>
+
+    <div class="duelo">
+      <div class="lado malo">
+        <div class="lado-cab">
+          <span class="cifra">5</span>
+          <span class="cifra-et">hallazgos<br>altos</span>
+        </div>
+        <p class="lado-nombre">Laboratorio <b>construido con prisa</b></p>
+        <ul class="lista">
+          <li>Balanceador público <b>sin protección</b> de aplicaciones</li>
+          <li>Dos servidores <b>expuestos directamente a internet</b></li>
+          <li>El puerto de administración <b>abierto al mundo entero</b>, en dos reglas
+            distintas</li>
+        </ul>
+        <p class="menores">Además: 3 hallazgos medios · solo 2 controles cumplen</p>
+      </div>
+
+      <div class="lado bueno">
+        <div class="lado-cab">
+          <span class="cifra">0</span>
+          <span class="cifra-et">hallazgos<br>altos</span>
+        </div>
+        <p class="lado-nombre">Laboratorio <b>construido con criterio</b></p>
+        <ul class="lista">
+          <li>Balanceador <b>con cortafuegos de aplicación</b> delante</li>
+          <li>Ningún servidor tiene dirección pública</li>
+          <li>Ninguna regla abre administración a internet</li>
+          <li>Registro de tráfico de red <b>activo</b></li>
+        </ul>
+        <p class="menores">Quedan 2 medios · 6 controles cumplen</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Prueba 1 · El mismo ataque contra los dos</h2>
+    <p class="sub">Tres peticiones maliciosas de manual, lanzadas contra cada balanceador.
+    Lo que cambia no es la aplicación: es lo que tiene delante.</p>
+
+    <div class="tabla-caja">
+      <table>
+        <thead>
+          <tr>
+            <th>Qué se envía</th>
+            <th>Petición</th>
+            <th class="num">Sin protección</th>
+            <th class="num">Con protección</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Una visita normal</td>
+            <td class="q">GET /</td>
+            <td class="num"><span class="codigo c200">200</span></td>
+            <td class="num"><span class="codigo c200">200</span></td>
+          </tr>
+          <tr>
+            <td>Inyección de código en el navegador</td>
+            <td class="q">GET /?q=&lt;script&gt;</td>
+            <td class="num"><span class="codigo c200 pasa">200</span></td>
+            <td class="num"><span class="codigo c403">403</span></td>
+          </tr>
+          <tr>
+            <td>Inyección SQL</td>
+            <td class="q">GET /?id=1' OR '1'=</td>
+            <td class="num"><span class="codigo c200 pasa">200</span></td>
+            <td class="num"><span class="codigo c403">403</span></td>
+          </tr>
+          <tr>
+            <td>Búsqueda de rutas de administración</td>
+            <td class="q">GET /admin</td>
+            <td class="num"><span class="codigo c200 pasa">200</span></td>
+            <td class="num"><span class="codigo c403">403</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="prueba" style="background:var(--seguro-tenue);border-color:var(--seguro-borde)">
+      <p><b>Lo que hay que decir aquí, y que casi nunca se dice:</b> un cortafuegos de
+      aplicación <b>no reemplaza al código seguro</b>. Compra tiempo y reduce ruido.
+      Lo que acaban de ver son ataques de libro de texto — un atacante real es más sutil.
+      El <span class="dato" style="display:inline;padding:2px 8px">200</span> de la
+      izquierda no significa que la aplicación sea vulnerable: significa que
+      <b>nadie está mirando</b>.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Las otras tres pruebas</h2>
+
+    <div class="pruebas">
+      <div class="prueba">
+        <span class="prueba-n">PRUEBA 2</span>
+        <h3>Entrar sin puertas abiertas</h3>
+        <p>Nos conectamos a un servidor que <b>no tiene dirección pública</b>. No hay
+        puerto que atacar desde internet, y aun así el administrador entra — con
+        credenciales de la nube, sesión con caducidad y registro de quién entró.</p>
+        <div class="dato">10.40.2.95 · sin IP pública</div>
+      </div>
+
+      <div class="prueba">
+        <span class="prueba-n">PRUEBA 3</span>
+        <h3>Que la plataforma diga que no</h3>
+        <p>Intentamos crear un almacenamiento <b>abierto al público</b> en un
+        compartimento protegido. La plataforma <b>rechaza la operación</b>. No avisa
+        después: impide antes.</p>
+        <div class="dato">Security Zone · prevención, no detección</div>
+      </div>
+
+      <div class="prueba">
+        <span class="prueba-n">PRUEBA 4</span>
+        <h3>Ver lo que pasó</h3>
+        <p>El laboratorio correcto tiene <b>registro de tráfico de red</b> encendido. Sin
+        eso, si algo ocurre, no hay forma de saber quién habló con quién. El otro
+        laboratorio no lo tiene, y por eso aparece como hallazgo.</p>
+        <div class="dato">Flow logs · 1 activo vs. ninguno</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="remate">
+    <span class="remate-t">Lo que hay que llevarse</span>
+    <p>La diferencia entre los dos laboratorios <b>no es presupuesto ni tecnología</b>.
+    Es una lista de decisiones que alguien tomó, o no tomó, mientras construía.</p>
+    <p class="menor">Ninguno de los cinco hallazgos del laboratorio de la izquierda
+    requiere comprar nada para arreglarse. Requiere saber que están ahí — y eso es
+    exactamente lo que hace el script que acaban de ver correr.</p>
+  </section>
+
+  <footer>
+    <div><b>Resultados reales</b>, obtenidos el 13 de septiembre de 2026 en la región
+    us-chicago-1, corriendo el mismo script de auditoría contra los dos compartimentos.
+    Ninguna cifra de esta hoja está estimada.</div>
+    <div>El script es de <b>solo lectura</b>: no crea, no modifica y no borra nada. Por
+    eso se puede entregar para correrlo contra su propio ambiente de desarrollo — solo
+    necesita un usuario con permisos de lectura.</div>
+  </footer>
+
+</div>
+</body>
+</html>
