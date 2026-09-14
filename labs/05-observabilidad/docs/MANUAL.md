@@ -94,9 +94,10 @@ El script arranca la carga, vigila la alarma y anota en
 
 | Evento | Qué hacer con el número |
 |---|---|
-| La alarma dispara | Define en qué minuto del guion arrancar la carga |
+| La alarma dispara | Define en qué minuto del guion arrancar la carga (medido: ~195 s) |
 | Llega el correo | Debe ser menos de un minuto después del disparo |
-| La alarma se cierra sola | Es el momento didáctico del bloque |
+| Se corta la carga | El script la corta solo, `segundos-con-alarma` después del disparo (300 por defecto) |
+| La alarma se cierra | Tiempo **tras el corte** (medido: 115 s). **Con carga no se cierra**: medido 35 min con el pool en su máximo |
 
 **Ajustes si hace falta:**
 

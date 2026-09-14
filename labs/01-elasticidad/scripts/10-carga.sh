@@ -5,11 +5,14 @@
 #
 # Golpea /burn a través del balanceador. Como el balanceador reparte en round robin,
 # la CPU sube en TODAS las instancias del pool a la vez — incluidas las nuevas que
-# entren. Eso es lo que hace que después baje sola y dispare el scale-in: más
-# instancias repartiéndose la misma carga = menos CPU por instancia.
+# entren.
 #
-# Ese detalle vale la pena narrarlo en la demo: es la elasticidad completa, no
-# solo la mitad de subir.
+# Ojo con lo que NO hace: la CPU no baja al crecer el pool. Este generador es de
+# lazo cerrado —cada hilo manda la siguiente petición en cuanto recibe la anterior—,
+# así que más instancias atienden más peticiones, igual de ocupadas. Medido el 12 de
+# septiembre: 35 min con el pool en su máximo de 6 y la CPU arriba. El scale-in llega
+# cuando se CORTA la carga. Con tráfico real de llegada fija sí bajaría: es una
+# propiedad del generador, y conviene decirlo así en la demo.
 #
 # Detener con Ctrl-C. El script limpia sus procesos hijos al salir.
 
@@ -51,11 +54,19 @@ limpiar() {
   pkill -f "burn\?ms=${MS}" 2>/dev/null || true   # red de seguridad
   wait 2>/dev/null || true
 
+  # En Git Bash para Windows NO existen pkill ni pgrep: los de arriba fallan en
+  # silencio, y con `pgrep ... || echo 0` este aviso decía siempre "detenida".
+  # Con Ctrl-C la carga sí se detiene (la señal llega a todo el grupo de procesos),
+  # pero la comprobación era de adorno. Encontrado el la fecha.
   local vivos
-  vivos=$(pgrep -fc "burn\?ms=${MS}" 2>/dev/null || echo 0)
+  if command -v tasklist >/dev/null 2>&1; then
+    vivos=$(tasklist //FI "IMAGENAME eq curl.exe" //NH 2>/dev/null | grep -ci "curl.exe")
+  else
+    vivos=$(pgrep -fc "burn\?ms=${MS}" 2>/dev/null | head -1)
+  fi
   if [ "${vivos:-0}" -gt 0 ]; then
-    echo "AVISO: quedan ${vivos} peticiones vivas. Si el pool no baja, revisar con:"
-    echo "  pgrep -af curl   (y matarlas a mano)"
+    echo "AVISO: quedan ${vivos} peticiones vivas. Si el pool no baja, cortarlas con:"
+    echo "  taskkill //IM curl.exe //F        (Windows)   ·   pkill curl   (Linux/Mac)"
   else
     echo "Carga detenida $(date '+%H:%M:%S'). El scale-in empieza tras el enfriamiento."
   fi

@@ -185,9 +185,28 @@ que escribirlo en Terraform.
 1. **Identity & Security → Security Zones → Recipes → Create recipe**
    - Nombre: `lab02-receta-demo`
    - Compartment: `lab`
-   - Políticas: marcar **solo** la de *denegar buckets públicos* (en la categoría de
-     restricción de acceso público; el nombre exacto en consola es del estilo
-     *Deny public buckets*) `[VALIDAR nombre exacto en consola]`.
+   - Políticas: marcar **solo** `deny public_buckets`.
+
+   > El nombre exacto está verificado contra el servicio: es `deny public_buckets`,
+   > tal cual, en minúsculas y con guion bajo. Hay 80 políticas disponibles y varias
+   > se parecen — `deny public_subnets`, `deny public_load_balancer`,
+   > `deny buckets_without_vault_key` — así que conviene buscar por el nombre y no
+   > por la descripción.
+
+   **Por CLI es más rápido que el asistente** (y evita elegir la política equivocada):
+
+   ```bash
+   # El OCID de la política, buscándolo por nombre
+   oci cloud-guard security-policy-collection list-security-policies      --compartment-id "$TENANCY" --all      --query 'data.items[?"display-name"==`deny public_buckets`].id' --raw-output
+
+   oci cloud-guard security-recipe create --compartment-id "<ocid-lab>"      --display-name "lab02-receta-demo" --security-policies '["<ocid-de-la-politica>"]'
+
+   oci cloud-guard security-zone create --compartment-id "<ocid-lab-02-zona-segura>"      --display-name "lab02-zona-demo" --security-zone-recipe-id "<ocid-de-la-receta>"
+   ```
+
+   Ojo con los subcomandos: **no existe** `security-zone list` ni
+   `security-policy list`. Las políticas se listan con
+   `security-policy-collection list-security-policies`, que no es evidente.
    > **Por qué solo una.** La receta máxima de Oracle exige también llaves de Vault en
    > buckets y volúmenes. Con ella, *hasta el bucket privado* sería rechazado, y el mensaje
    > de la demo —"lo que cumple pasa, lo que no cumple no"— se pierde.
@@ -202,6 +221,15 @@ que escribirlo en Terraform.
    ./40-prueba-security-zone.sh "<ocid-lab-02-zona-segura>"
    ```
    Esperado: el privado se crea, el público se rechaza citando la política.
+
+   > **Dale unos minutos antes de probar.** Una zona recién creada aparece en la
+   > consola antes de estar aplicando su política: durante esa ventana el bucket
+   > público **se crea sin problema** y el script informa, correctamente, que la zona
+   > no tiene la política. Medido ensayando: el primer intento salió "SE CREÓ" y el
+   > mismo comando, minutos después, salió "RECHAZADO".
+   >
+   > Si en la preparación hubiera que rehacerla, ese retraso es la diferencia entre una demo
+   > que funciona y una que dice lo contrario de lo que uno acaba de afirmar.
 
 ---
 

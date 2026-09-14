@@ -26,7 +26,7 @@ set -uo pipefail
 COMP="${1:-}"
 REFRESCO="${2:-20}"
 
-[ -z "$COMP" ] && { echo "Uso: $0 <compartment-ocid> [segundos]"; exit 1; }
+[ -z "$COMP" ] && { echo "Uso: $0 <compartment-ocid> [segundos]"; echo; echo "Si pasaste una variable del entorno del dia y llego vacia, falta"; echo "cargarlo en ESTA terminal:  source <repo>/docs/entorno-del-dia.sh"; exit 1; }
 command -v oci >/dev/null || { echo "Falta OCI CLI"; exit 1; }
 command -v jq  >/dev/null || { echo "Falta jq"; exit 1; }
 

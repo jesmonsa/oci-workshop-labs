@@ -23,7 +23,14 @@ for cmd in oci terraform jq curl; do
 done
 
 titulo "Identidad y región"
-if ! REGION=$(oci iam region-subscription list --query 'data[?"is-home-region"].{r:"region-name"}|[0].r' --raw-output 2>/dev/null); then
+# Se filtra con jq y NO con --query. En algunas versiones del CLI, un filtro que
+# lleva un campo entrecomillado con guiones ("is-home-region") acaba compilandose
+# como expresion regular y revienta con "bad character range s-h". Como la salida
+# va a /dev/null, el script concluia que OCI no responde cuando responde
+# perfectamente, y anunciaba "NO SE PUEDE CONTINUAR" como primera impresion del
+# laboratorio.
+if ! REGION=$(oci iam region-subscription list --output json 2>/dev/null               | jq -r '[.data[] | select(."is-home-region") | ."region-name"][0] // empty' | tr -d '
+')    || [ -z "$REGION" ]; then
   falta "No se pudo consultar OCI. Revisar ~/.oci/config y la llave de API."
   echo
   echo "Resultado: NO SE PUEDE CONTINUAR. Corregir autenticación antes de seguir."
@@ -37,8 +44,13 @@ TENANCY=$(oci iam compartment list --compartment-id-in-subtree true --all \
 [ -n "$TENANCY" ] && ok "Tenancy accesible" || aviso "No se listaron compartments"
 
 titulo "Compartment del laboratorio"
-COMP_ID=$(oci iam compartment list --all --name lab-01-elasticidad \
-  --query 'data[0].id' --raw-output 2>/dev/null || echo "")
+# --compartment-id-in-subtree es imprescindible: lab-01-elasticidad no cuelga del
+# tenancy sino de lab, y sin recorrer el arbol la busqueda vuelve vacia. El
+# script concluia que el compartment no existe teniendolo delante, y lo marcaba
+# como bloqueante.
+COMP_ID=$(oci iam compartment list --compartment-id "${TENANCY:-}" \
+  --compartment-id-in-subtree true --all --name lab-01-elasticidad \
+  --query 'data[0].id' --raw-output 2>/dev/null | tr -d '\015' || echo "")
 if [ -n "$COMP_ID" ] && [ "$COMP_ID" != "null" ]; then
   ok "lab-01-elasticidad existe: ${COMP_ID:0:35}..."
 else

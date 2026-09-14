@@ -29,7 +29,13 @@ curl -s "http://$LB/" | head -3
 ```
 
 **La primera pregunta es la que más tiempo ahorra.** Si el pool ya creció y los backends
-están sanos, la plataforma está haciendo su trabajo: esta alarma se va a cerrar sola.
+están sanos, la plataforma está haciendo su trabajo y **nadie está perdiendo servicio**.
+
+Pero no esperes a que la alarma se cierre por haber más capacidad: **no se cierra por
+eso**. Medido: con la carga sostenida, el pool llegó a su máximo y la alarma siguió
+sonando 35 minutos. Más capacidad sube el rendimiento, no baja la utilización. La alarma
+se cierra cuando **baja la demanda** (medido: 115 s después de cortar la carga). La
+pregunta útil no es «¿ya se cerró?», sino **«¿el pool llegó a su tope?»**.
 
 ---
 
@@ -37,9 +43,10 @@ están sanos, la plataforma está haciendo su trabajo: esta alarma se va a cerra
 
 ```
 ¿El pool creció y los backends están OK?
-├── SÍ  → ¿La alarma se cerró en menos de 15 min?
-│         ├── SÍ  → NO HAY ACCIÓN. Se registra y se revisa en la preparación (sección 4).
-│         └── NO  → El pool llegó a su tope. Ir a 3.a
+├── SÍ  → ¿El pool está en su tamaño máximo?
+│         ├── NO  → NO HAY ACCIÓN urgente: está absorbiendo la ráfaga. Se registra y
+│         │         se revisa en la preparación (sección 4), aunque la alarma siga sonando.
+│         └── SÍ  → Ya no queda margen para crecer. Ir a 3.a
 └── NO  → ¿Los backends están caídos?
           ├── SÍ  → Esto ya es la alarma CRITICAL. Ver RUNBOOK-backends-caidos.md
           └── NO  → El autoescalamiento no está reaccionando. Ir a 3.b

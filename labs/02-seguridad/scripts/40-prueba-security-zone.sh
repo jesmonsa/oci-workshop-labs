@@ -12,7 +12,14 @@
 set -uo pipefail
 
 ZONA="${1:-}"
-[ -z "$ZONA" ] && { echo "Uso: $0 <compartment-ocid-de-la-zona>"; exit 1; }
+if [ -z "$ZONA" ]; then
+  echo "Uso: $0 <compartment-ocid-de-la-zona>"
+  echo
+  echo "Si escribiste una variable como \$T04ZONA y llegó vacía, es que falta cargar"
+  echo "el entorno del día en ESTA terminal:"
+  echo "    source ../../../docs/entorno-del-dia.sh"
+  exit 1
+fi
 
 SUFIJO=$(date +%H%M%S)
 

@@ -54,8 +54,8 @@
 <p>No es «qué herramienta de monitoreo compramos». Es esta:</p>
 <blockquote><b>¿Qué merece despertar a alguien de madrugada y qué puede esperar al día siguiente?</b></blockquote>
 <p>Todo el laboratorio está construido para hacer visible esa pregunta con un caso concreto. La demostración central es un ciclo completo que se midió de punta a punta:</p>
-<div class="tablacaja"><table><thead><tr><th>Momento</th><th>Estado de la alarma</th></tr></thead><tbody><tr><td>En reposo</td><td><code>OK</code></td></tr><tr><td>Con carga: CPU en 62 % contra un umbral de 45 %</td><td><b><code>FIRING</code></b></td></tr><tr><td>Después, sin que nadie intervenga</td><td><b><code>OK</code> — se cerró sola</b></td></tr></tbody></table></div>
-<p>La alarma sonó, el autoescalamiento agregó capacidad, la CPU por instancia bajó y la alarma se cerró <b>sin que nadie hiciera nada</b>. Esa secuencia es el argumento del laboratorio: una alarma que se resuelve sola no debía despertar a nadie, pero tampoco debía desaparecer sin dejar rastro. Distinguir lo que se atiende <i>ahora</i> de lo que hay que <i>saber</i> es lo que separa a un equipo que apaga incendios de uno que opera.</p>
+<div class="tablacaja"><table><thead><tr><th>Momento</th><th>Estado de la alarma</th></tr></thead><tbody><tr><td>En reposo</td><td><code>OK</code></td></tr><tr><td>Con carga: CPU en 62 % contra un umbral de 45 %</td><td><b><code>FIRING</code></b></td></tr><tr><td>Con carga sostenida y el grupo en su máximo</td><td><b>Sigue <code>FIRING</code></b> (medido: 35 min)</td></tr><tr><td>Al cortar la carga</td><td><b><code>OK</code></b> en ~115 s</td></tr></tbody></table></div>
+<p>La alarma sonó, el autoescalamiento agregó capacidad… y <b>la alarma siguió sonando</b>. El generador del laboratorio es de lazo cerrado: cada hilo lanza la siguiente petición en cuanto recibe la anterior, así que más capacidad sube el rendimiento en lugar de bajar la utilización. Se cerró al bajar la demanda. Esa secuencia es el argumento del laboratorio: nadie perdió servicio y la alarma no debía despertar a nadie, pero tampoco debía desaparecer sin dejar rastro, y la señal que de verdad importa es otra: <b>el grupo llegó a su tope</b>. Distinguir lo que se atiende <i>ahora</i> de lo que hay que <i>saber</i> es lo que separa a un equipo que apaga incendios de uno que opera.</p>
 <p>El entregable no es la alarma: es la <b>matriz de señales</b> del capítulo 13.</p>
 <hr/>
 <h2 id="2-equivalencias-con-otras-nubes">2. Equivalencias con otras nubes</h2>
@@ -162,9 +162,10 @@ oci ons subscription list --compartment-id "$COMP07" \
 <p>Una métrica no es una línea: es un conjunto de líneas, una por combinación de dimensiones. <code>CpuUtilization</code> trae, entre otras, el identificador del recurso y su nombre visible.</p>
 <p>En la consulta, las dimensiones se filtran entre llaves:</p>
 <pre><code>CpuUtilization[1m]{resourceDisplayName = "lab01-app"}.mean() &gt; 45</code></pre>
-<p>Y hay una decisión de fondo, que es la que explica por qué la alarma de este laboratorio se cierra sola:</p>
+<p>Y hay una decisión de fondo, que decide si una alarma de CPU <b>puede</b> cerrarse al crecer el grupo:</p>
 <ul><li><b>Sin agrupar</b> (lo que hace este manual), la alarma evalúa la condición <b>por cada instancia</b>. Si una instancia pasa del umbral, la alarma dispara.</li><li><b>Agrupando</b> con <code>.grouping()</code>, todas las series se colapsan en una sola y la condición se evalúa sobre el conjunto.</li></ul>
-<p>Como aquí se evalúa por instancia y el promedio de CPU <b>por instancia</b> baja cuando el grupo crece, el autoescalamiento apaga la alarma sin que nadie intervenga. Si se agrupara por suma, el total no bajaría al crecer el grupo y la alarma no se cerraría nunca. La misma métrica, el mismo umbral, y un comportamiento opuesto.</p>
+<p>Evaluando por instancia, <b>con tráfico real de llegada fija</b>, la CPU por instancia baja cuando el grupo crece y la alarma puede cerrarse sola. Si se agrupara por suma, el total no bajaría al crecer el grupo y no se cerraría nunca. La misma métrica, el mismo umbral, y un comportamiento opuesto.</p>
+<div class="caja c-cuidado"><p class="cajatit">CUIDADO · En este laboratorio NO se cierra al crecer el grupo</p><p>El generador de carga es de lazo cerrado: cada hilo manda la siguiente petición en cuanto recibe la anterior. Con más instancias, cada una atiende más peticiones y sigue igual de ocupada. Medido: 35 minutos con el grupo en su máximo de 6 y la alarma en <code>FIRING</code>; se cerró 115 s después de cortar la carga. No es un defecto de la alarma: es una propiedad de la carga, y es la misma de una cola o un batch.</p></div>
 <h3 id="6-6-la-funci-n-que-detecta-la-ceguera">6.6 La función que detecta la ceguera</h3>
 <p>MQL tiene una función que casi nadie usa y que resuelve el estado más peligroso de todos:</p>
 <pre><code>CpuUtilization[5m].absent()</code></pre>
@@ -200,9 +201,14 @@ oci ons subscription list --compartment-id "$COMP07" \
 
 QUE HACER (runbook): https://&lt;su-repo&gt;/runbooks/RUNBOOK-saturacion-cpu.md
 
-Antes de escalar manualmente, verificar si el autoescalamiento ya reaccionó:
-si el grupo creció y la carga es legítima, esta alarma se cierra sola y NO
-requiere acción — solo queda registrada para la revisión semanal.</code></pre>
+Antes de escalar manualmente, mirar DOS cosas:
+
+1. Si los backends responden. Si el servicio no se degradó, esto no es una
+   urgencia: la plataforma está absorbiendo la ráfaga.
+2. Si el grupo llegó a su tamaño máximo. Esa es la señal que importa, porque
+   significa que ya no queda margen para crecer.
+
+Esta alarma NO se cierra porque entre capacidad: se cierra cuando baja la demanda.</code></pre>
 <p>Tres cosas, y ninguna es decorativa:</p>
 <ul><li><b>El enlace al runbook viaja dentro del correo.</b> Quien lo recibe de madrugada no tiene que buscar en ningún wiki. Esto es lo que baja el tiempo de recuperación: no el tablero, no la herramienta, sino que la instrucción viaje con la alarma.</li><li><b>La primera instrucción es descartar, no diagnosticar.</b> «¿La plataforma ya lo está resolviendo sola?» es la pregunta que ahorra la mitad de las madrugadas.</li><li><b>Dice explícitamente que puede no requerir acción.</b> Un runbook que solo contempla la rama «hay que hacer algo» entrena al equipo a hacer algo siempre.</li></ul>
 <p><b>El cuerpo del mensaje es el runbook de emergencia.</b> Si mañana el repositorio de runbooks no abre —porque es privado, porque cambió la ruta, porque la VPN no levanta—, lo único que queda es el texto del correo.</p>
@@ -254,7 +260,7 @@ QUE HACER (runbook): https://&lt;su-repo&gt;/runbooks/RUNBOOK-backends-caidos.md
 <p>Una alarma tiene dos transiciones, no una: entra en <code>FIRING</code> y vuelve a <code>OK</code>. La segunda casi nunca se diseña, y es la que decide si el equipo le va a hacer caso a la primera.</p>
 <ul><li><b>Si se cierra sola</b>, quien la recibió sabe que la plataforma reaccionó. La alarma queda registrada para la revisión semanal y nadie se levanta.</li><li><b>Si no se cierra sola nunca</b>, cada alarma queda abierta para siempre. El panel se llena de rojo permanente, y el rojo permanente es indistinguible del rojo nuevo. A las tres semanas nadie mira el panel.</li></ul>
 <p>Para que se cierre sola hacen falta dos condiciones, y las dos se configuran en esta pantalla:</p>
-<ol><li>Que la condición <b>pueda</b> dejar de cumplirse. Una alarma sobre un contador acumulado —<code>sum()</code> de errores desde siempre— nunca baja. Si la métrica solo crece, la alarma no se cierra jamás: hay que medir tasa, no total.</li><li>Que la agrupación <b>deje</b> bajar el número. Es el caso de la sección 6.5: sin agrupar, la CPU por instancia baja al crecer el grupo y la alarma se cierra; agrupando por suma, el total no baja y la alarma se queda encendida.</li></ol>
+<ol><li>Que la condición <b>pueda</b> dejar de cumplirse. Una alarma sobre un contador acumulado —<code>sum()</code> de errores desde siempre— nunca baja. Si la métrica solo crece, la alarma no se cierra jamás: hay que medir tasa, no total.</li><li>Que la agrupación <b>deje</b> bajar el número. Es el caso de la sección 6.5: sin agrupar, con tráfico de llegada fija, la CPU por instancia baja al crecer el grupo y la alarma se cierra; agrupando por suma, el total no baja y se queda encendida. (En el laboratorio, con carga de lazo cerrado, se cierra al cortar la carga.)</li></ol>
 <div class="caja c-cuidado"><p class="cajatit">CUIDADO · Una alarma que no se cierra sola entrena al equipo a ignorarla</p><p>No es un problema estético. Es el mecanismo exacto por el que un modelo de observabilidad se muere: las alarmas que quedan encendidas ensucian el panel, el panel deja de mirarse, y cuando llega la alarma que sí importaba, llega a un panel que nadie mira hace meses.</p><p>Cuando revise una alarma heredada, hágale dos preguntas en vez de una: <b>¿en qué condiciones dispara?</b> y <b>¿en qué condiciones se apaga?</b> La segunda casi nunca tiene respuesta escrita.</p></div>
 <h3 id="9-5-ventanas-de-silencio-para-mantenimientos">9.5 Ventanas de silencio para mantenimientos</h3>
 <p>La pantalla de la alarma permite suprimir notificaciones durante un rango de fechas. Sirve para un mantenimiento planificado.</p>

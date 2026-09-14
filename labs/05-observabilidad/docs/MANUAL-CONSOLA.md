@@ -79,12 +79,16 @@ punta:
 |---|---|
 | En reposo | `OK` |
 | Con carga: CPU en 62 % contra un umbral de 45 % | **`FIRING`** |
-| Después, sin que nadie intervenga | **`OK` — se cerró sola** |
+| Con carga sostenida y el grupo en su máximo | **Sigue `FIRING`** (medido: 35 min) |
+| Al cortar la carga | **`OK`** en ~115 s |
 
-La alarma sonó, el autoescalamiento agregó capacidad, la CPU por instancia bajó y
-la alarma se cerró **sin que nadie hiciera nada**. Esa secuencia es el argumento
-del laboratorio: una alarma que se resuelve sola no debía despertar a nadie, pero
-tampoco debía desaparecer sin dejar rastro. Distinguir lo que se atiende *ahora*
+La alarma sonó, el autoescalamiento agregó capacidad… y **la alarma siguió sonando**.
+El generador del laboratorio es de lazo cerrado: cada hilo lanza la siguiente petición
+en cuanto recibe la anterior, así que más capacidad sube el rendimiento en lugar de
+bajar la utilización. Se cerró al bajar la demanda. Esa secuencia es el argumento del
+laboratorio: nadie perdió servicio y la alarma no debía despertar a nadie, pero
+tampoco debía desaparecer sin dejar rastro, y la señal que de verdad importa es otra:
+**el grupo llegó a su tope**. Distinguir lo que se atiende *ahora*
 de lo que hay que *saber* es lo que separa a un equipo que apaga incendios de uno
 que opera.
 
@@ -478,19 +482,25 @@ En la consulta, las dimensiones se filtran entre llaves:
 CpuUtilization[1m]{resourceDisplayName = "lab01-app"}.mean() > 45
 ```
 
-Y hay una decisión de fondo, que es la que explica por qué la alarma de este
-laboratorio se cierra sola:
+Y hay una decisión de fondo, que decide si una alarma de CPU **puede** cerrarse al
+crecer el grupo:
 
 - **Sin agrupar** (lo que hace este manual), la alarma evalúa la condición **por
   cada instancia**. Si una instancia pasa del umbral, la alarma dispara.
 - **Agrupando** con `.grouping()`, todas las series se colapsan en una sola y la
   condición se evalúa sobre el conjunto.
 
-Como aquí se evalúa por instancia y el promedio de CPU **por instancia** baja
-cuando el grupo crece, el autoescalamiento apaga la alarma sin que nadie
-intervenga. Si se agrupara por suma, el total no bajaría al crecer el grupo y la
-alarma no se cerraría nunca. La misma métrica, el mismo umbral, y un
-comportamiento opuesto.
+Evaluando por instancia, **con tráfico real de llegada fija**, la CPU por instancia
+baja cuando el grupo crece y la alarma puede cerrarse sola. Si se agrupara por suma,
+el total no bajaría al crecer el grupo y no se cerraría nunca. La misma métrica, el
+mismo umbral, y un comportamiento opuesto.
+
+!!! CUIDADO En este laboratorio NO se cierra al crecer el grupo
+    El generador de carga es de lazo cerrado: cada hilo manda la siguiente petición
+    en cuanto recibe la anterior. Con más instancias, cada una atiende más peticiones
+    y sigue igual de ocupada. Medido: 35 minutos con el grupo en su máximo de 6 y la
+    alarma en `FIRING`; se cerró 115 s después de cortar la carga. No es un defecto
+    de la alarma: es una propiedad de la carga, y es la misma de una cola o un batch.
 
 ### 6.6 La función que detecta la ceguera
 
@@ -632,9 +642,14 @@ La CPU del servicio superó el 45 % durante 3 minutos.
 
 QUE HACER (runbook): https://<su-repo>/runbooks/RUNBOOK-saturacion-cpu.md
 
-Antes de escalar manualmente, verificar si el autoescalamiento ya reaccionó:
-si el grupo creció y la carga es legítima, esta alarma se cierra sola y NO
-requiere acción — solo queda registrada para la revisión semanal.
+Antes de escalar manualmente, mirar DOS cosas:
+
+1. Si los backends responden. Si el servicio no se degradó, esto no es una
+   urgencia: la plataforma está absorbiendo la ráfaga.
+2. Si el grupo llegó a su tamaño máximo. Esa es la señal que importa, porque
+   significa que ya no queda margen para crecer.
+
+Esta alarma NO se cierra porque entre capacidad: se cierra cuando baja la demanda.
 ```
 
 Tres cosas, y ninguna es decorativa:
@@ -839,8 +854,9 @@ esta pantalla:
    acumulado —`sum()` de errores desde siempre— nunca baja. Si la métrica solo
    crece, la alarma no se cierra jamás: hay que medir tasa, no total.
 2. Que la agrupación **deje** bajar el número. Es el caso de la sección 6.5: sin
-   agrupar, la CPU por instancia baja al crecer el grupo y la alarma se cierra;
-   agrupando por suma, el total no baja y la alarma se queda encendida.
+   agrupar, con tráfico de llegada fija, la CPU por instancia baja al crecer el grupo
+   y la alarma se cierra; agrupando por suma, el total no baja y se queda encendida.
+   (En el laboratorio, con carga de lazo cerrado, se cierra al cortar la carga.)
 
 !!! CUIDADO Una alarma que no se cierra sola entrena al equipo a ignorarla
     No es un problema estético. Es el mecanismo exacto por el que un modelo de

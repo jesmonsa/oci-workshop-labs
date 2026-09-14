@@ -23,8 +23,11 @@ BASTION=$(cd "$TF" && terraform output -raw bastion_id)
 INSTANCIA=$(cd "$TF" && terraform output -json instancia_ids | jq -r '.[0]')
 IP_PRIV=$(cd "$TF" && terraform output -json instancia_ips_privadas | jq -r '.[0]')
 
-echo "Tu IP pública ahora: $(curl -s --max-time 5 ifconfig.me || echo '?')"
-echo "Debe estar en ips_admin_cidr. Si no, la sesión se crea pero la conexión no entra."
+# La lista de clientes del bastión está en 0.0.0.0/0 en el tenancy de
+# demostración, así que la IP de origen ya no condiciona nada. Se sigue
+# mostrando porque es útil saber desde dónde se está saliendo, pero sin la
+# advertencia, que en la sala solo abre una pregunta que no lleva a ningún lado.
+echo "Saliendo desde: $(curl -s --max-time 5 ifconfig.me || echo '?')"
 echo
 
 echo "Creando sesión SSH administrada (TTL ${TTL}s) hacia ${IP_PRIV}..."

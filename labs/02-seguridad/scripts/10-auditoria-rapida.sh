@@ -33,15 +33,23 @@ SALIDA="${AQUI}/../evidencias/auditoria-$(date +%Y%m%d-%H%M).txt"
 ALTOS=0; MEDIOS=0; OKS=0
 HALLAZGOS=()
 
+# Los valores vienen del CLI, que en Windows escribe CRLF. Un retorno de carro
+# dentro del texto de un hallazgo hace que el terminal vuelva al inicio de la
+# linea y escriba encima: el hallazgo sale ilegible en pantalla, aunque el conteo
+# sea correcto. Se limpia AQUI, en la unica puerta por la que sale todo, y no en
+# cada sitio donde se arma un mensaje.
+limpiar_cr() { printf '%s' "$1" | tr -d '\015'; }
+
 hallazgo() {  # severidad control descripcion
-  local sev="$1" ctl="$2" txt="$3"
+  local sev="$1" ctl="$2" txt
+  txt="$(limpiar_cr "$3")"
   HALLAZGOS+=("$(printf '%-5s  %-5s  %s' "$sev" "$ctl" "$txt")")
   case "$sev" in
     ALTO)  ALTOS=$((ALTOS+1)) ;;
     MEDIO) MEDIOS=$((MEDIOS+1)) ;;
   esac
 }
-cumple() { OKS=$((OKS+1)); HALLAZGOS+=("$(printf '%-5s  %-5s  %s' "ok" "$1" "$2")"); }
+cumple() { OKS=$((OKS+1)); HALLAZGOS+=("$(printf '%-5s  %-5s  %s' "ok" "$(limpiar_cr "$1")" "$(limpiar_cr "$2")")"); }
 paso()   { printf '  - %s...\n' "$1"; }
 
 echo
@@ -50,11 +58,10 @@ echo "Compartment: ${COMP:0:40}..."
 echo
 
 # --- R-01 · Instancias con IP pública -----------------------------------------
-# Al decodificar se quita el retorno de carro: en Windows el CLI escribe CRLF, el
-# 
- se cuela en la cadena base64 y `base64 -d` escupe "invalid input" en medio de
-# la demostracion. No altera el resultado de la auditoria, pero ensucia la pantalla
-# justo en el momento en que el cliente esta mirando.
+# Antes de decodificar se quita el retorno de carro. En Windows el CLI escribe
+# CRLF, ese caracter viaja dentro de la cadena y la invalida, asi que el comando
+# de decodificacion se queja en mitad de la demostracion. No altera el resultado
+# de la auditoria: solo ensucia la pantalla justo cuando el cliente esta mirando.
 paso "Instancias con IP pública"
 INSTANCIAS=$(oci compute instance list --compartment-id "$COMP" --all \
   --lifecycle-state RUNNING --query 'data[].{id:id,n:"display-name"}' 2>/dev/null || echo "[]")

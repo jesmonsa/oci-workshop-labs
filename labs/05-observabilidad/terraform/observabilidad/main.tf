@@ -60,11 +60,11 @@ resource "oci_ons_subscription" "correo" {
 # --- Alarma 1: saturación de cómputo ----------------------------------------
 #
 # Es la alarma de la demo. El generador de carga del módulo 1 la hace sonar en
-# unos minutos... y el autoescalamiento la apaga sola poco después.
+# unos minutos (medido: ~195 s).
 #
-# Ese ciclo completo —suena, la plataforma reacciona, se cierra— es justamente lo
-# que hay que saber distinguir: si se resuelve sola, no despierta a nadie, pero sí
-# queda registrada. Ver docs/01-GUION-40MIN.md, minuto 12.
+# Y NO la apaga el autoescalamiento: medido, con la carga puesta el pool llegó a su
+# máximo y la alarma siguió sonando 35 minutos. Se cierra al bajar la demanda (115 s
+# tras cortar la carga). Ver el cuerpo del mensaje y docs/01-GUION-40MIN.md.
 
 resource "oci_monitoring_alarm" "cpu_saturacion" {
   compartment_id        = var.compartment_ocid

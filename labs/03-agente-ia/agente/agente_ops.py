@@ -182,12 +182,20 @@ def salud_balanceadores(ctx: Contexto) -> list[dict]:
     for lb in ctx.todos(balanceador.list_load_balancers, compartment_id=ctx.compartment):
         for nombre_bs in (lb.backend_sets or {}):
             salud = balanceador.get_backend_set_health(lb.id, nombre_bs).data
+            # El SDK NO devuelve la lista de backends sanos: devuelve el total y los
+            # nombres de los que estan mal. Los sanos se deducen restando. Pedir
+            # `ok_backend_names` revienta con AttributeError en mitad de la demo.
+            criticos = len(salud.critical_state_backend_names or [])
+            alerta = len(salud.warning_state_backend_names or [])
+            desconocidos = len(salud.unknown_state_backend_names or [])
+            total = salud.total_backend_count or 0
             estado.append({
                 "balanceador": lb.display_name,
                 "backend_set": nombre_bs,
                 "estado": salud.status,
-                "backends_ok": len(salud.ok_backend_names or []),
-                "backends_criticos": len(salud.critical_state_backend_names or []),
+                "backends": total,
+                "backends_ok": max(total - criticos - alerta - desconocidos, 0),
+                "backends_criticos": criticos,
             })
     return estado
 
